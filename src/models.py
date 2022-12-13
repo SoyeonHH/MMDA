@@ -143,8 +143,9 @@ class MISA(nn.Module):
         self.classifier = nn.Sequential()
         self.classifier.add_module('classifier_layer_1', nn.Linear(in_features=self.config.hidden_size*6, out_features=self.config.hidden_size*3))
         self.classifier.add_module('classifier_layer_1_dropout', nn.Dropout(dropout_rate))
-        self.classifier.add_module('classifier_layer_1_activation', nn.Sigmoid())
+        self.classifier.add_module('classifier_layer_1_activation', self.activation)
         self.classifier.add_module('classifier_layer_3', nn.Linear(in_features=self.config.hidden_size*3, out_features=output_size))
+        self.classifier.add_module('classifier_layer_3_activation', nn.Sigmoid())
 
         self.tlayer_norm = nn.LayerNorm((hidden_sizes[0]*2,))
         self.vlayer_norm = nn.LayerNorm((hidden_sizes[1]*2,))
@@ -261,9 +262,8 @@ class MISA(nn.Module):
         self.utt_v_orig = utterance_v = self.project_v(utterance_v)
         self.utt_a_orig = utterance_a = self.project_a(utterance_a)
 
-
         # Private-shared components
-        self.utt_private_t = self.private_t(utterance_t)
+        self.utt_private_t = self.private_t(utterance_t)        
         self.utt_private_v = self.private_v(utterance_v)
         self.utt_private_a = self.private_a(utterance_a)
 

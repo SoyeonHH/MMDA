@@ -58,6 +58,9 @@ class DiffLoss(nn.Module):
         input2 = input2.view(batch_size, -1)
 
         # Zero mean
+        input1 = torch.nan_to_num(input1)
+        input2 = torch.nan_to_num(input2)
+        
         input1_mean = torch.mean(input1, dim=0, keepdim=True)
         input2_mean = torch.mean(input2, dim=0, keepdim=True)
         input1 = input1 - input1_mean

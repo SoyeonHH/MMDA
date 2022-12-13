@@ -81,6 +81,11 @@ class Solver(object):
                 self.model.embed.weight.data = self.train_config.pretrained_emb
             self.model.embed.requires_grad = False
         
+        # # Multi-GPU training setting
+        # if torch.cuda.device_count() > 1:
+        #     print("Let's use", torch.cuda.device_count(), "GPUs!")
+        #     self.model = nn.DataParallel(self.model)
+        
         # if torch.cuda.is_available() and cuda:
         self.model.to(self.device)
 
@@ -88,7 +93,7 @@ class Solver(object):
             self.optimizer = self.train_config.optimizer(
                 filter(lambda p: p.requires_grad, self.model.parameters()),
                 lr=self.train_config.learning_rate)
-
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5, verbose=True, min_lr=1e-6)
 
     # @time_desc_decorator('Training Start!')
     def train(self):
@@ -196,9 +201,9 @@ class Solver(object):
                 torch.save(self.optimizer.state_dict(), f'checkpoints/optim_{self.train_config.name}.std')
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
-                save_model(self.model, self.train_config.data)
+                save_model(self.train_config, self.model, self.train_config.data)
                 # Print best model results
-                eval_values = get_metrics(best_results, best_truths)
+                eval_values = get_metrics(best_truths, best_results)
                 # if self.train_config.use_confidNet:
                 #     eval_values = eval_binary(best_results, best_truths)
                 # else:
@@ -230,7 +235,7 @@ class Solver(object):
         train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
-        eval_values_best = get_metrics(best_results, best_truths)
+        eval_values_best = get_metrics(best_truths, best_results)
         # total_end = time.time()
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
@@ -283,8 +288,8 @@ class Solver(object):
                 loss = cls_loss
 
                 eval_loss.append(loss.item())
-                y_pred.append(emo_label.detach().cpu().numpy())
-                y_true.append(y.detach().cpu().numpy())
+                y_pred.append(y_tilde.detach().cpu().numpy())
+                y_true.append(emo_label.detach().cpu().numpy())
 
 
         eval_loss = np.mean(eval_loss)
@@ -362,6 +367,6 @@ class Solver(object):
     def get_conf_loss(self, pred, truth):
         tcp = 0
         for i in range(6):
-            tcp += self.loss_tcp(self.model.pred_tcp, (truth[i] * pred[i]))
-        tcp_loss = round(tcp // 6.0, 4)
+            tcp += self.loss_tcp(self.model.tcp, (truth[i] * pred[i]))
+        tcp_loss = torch.round(torch.div(tcp, 6.0), decimals=4)
         return tcp_loss + self.loss_mcp(pred, truth)

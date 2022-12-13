@@ -8,16 +8,18 @@ import pprint
 from torch import optim
 import torch.nn as nn
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+
 # path to a pretrained word embedding file
-word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
-# word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
+# word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
+word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
-sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
-data_dir = Path('/home/iknow/workspace/multimodal')
-# sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
-# data_dir = Path('/data1/multimodal')
+# sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
+# data_dir = Path('/home/iknow/workspace/multimodal')
+sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
+data_dir = Path('/data1/multimodal')
 data_dict = {'mosi': data_dir.joinpath('MOSI'), 'mosei': data_dir.joinpath('MOSEI')}
 optimizer_dict = {'RMSprop': optim.RMSprop, 'Adam': optim.Adam}
 activation_dict = {'elu': nn.ELU, "hardshrink": nn.Hardshrink, "hardtanh": nn.Hardtanh,
@@ -135,6 +137,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
+    parser.add_argument('--weight_decay', type=float, default=0.1)
 
     # TODO: Modify the model.py to adapt dynamic feature extractor (rnncell -> extractor)
     parser.add_argument('--extractor', type=str, default='lstm', help='one of {lstm, trasformer}')
