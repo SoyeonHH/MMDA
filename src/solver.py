@@ -185,7 +185,8 @@ class Solver(object):
                 
 
             train_losses.append(train_loss)
-            print(f"Training loss: {round(np.mean(train_loss), 4)}")
+            train_loss_avg = round(np.mean(train_loss), 4)
+            print(f"Epochs: {e}, Training loss: {train_loss_avg}")
 
             valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
             
@@ -204,10 +205,6 @@ class Solver(object):
                 save_model(self.train_config, self.model, self.train_config.data)
                 # Print best model results
                 eval_values = get_metrics(best_truths, best_results)
-                # if self.train_config.use_confidNet:
-                #     eval_values = eval_binary(best_results, best_truths)
-                # else:
-                #     eval_values = eval_mosei_senti(best_results, best_truths, True)
             else:
                 curr_patience -= 1
                 if curr_patience <= -1:
@@ -222,7 +219,7 @@ class Solver(object):
             wandb.log(
                 (
                     {
-                        "train_loss": train_loss,
+                        "train_loss": train_loss_avg,
                         "valid_loss": valid_loss,
                         "test_f_score": eval_values['f1'],
                         "test_precision": eval_values['precision'],
@@ -236,6 +233,12 @@ class Solver(object):
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results)
+        best_acc, best_f1, best_precision, best_recall = \
+             eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']
+        print(f'Accuracy: {best_acc}')
+        print(f'F1 score: {best_f1}')
+        print(f'Precision: {best_precision}')
+        print(f'Recall: {best_recall}')
         # total_end = time.time()
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
@@ -288,13 +291,16 @@ class Solver(object):
                 loss = cls_loss
 
                 eval_loss.append(loss.item())
+
+                # y_tilde = torch.argmax(y_tilde, dim=1)
+                # emo_label = torch.argmax(emo_label, dim=1)
                 y_pred.append(y_tilde.detach().cpu().numpy())
                 y_true.append(emo_label.detach().cpu().numpy())
 
 
         eval_loss = np.mean(eval_loss)
-        y_true = np.concatenate(y_true, axis=0).squeeze()
-        y_pred = np.concatenate(y_pred, axis=0).squeeze()
+        y_true = np.concatenate(y_true, axis=0).squeeze()   # (1871, 6)
+        y_pred = np.concatenate(y_pred, axis=0).squeeze()   # (1871, 6)
 
         accuracy = get_accuracy(y_true, y_pred)
 
