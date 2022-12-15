@@ -239,8 +239,8 @@ class MISA(nn.Module):
         h = self.transformer_encoder(h)
         h = torch.cat((h[0], h[1], h[2], h[3], h[4], h[5]), dim=1)
 
-        self.tcp = self.confidence(h)   # shape (batch_size, 1)
-        o = self.classifier(h)          # shape (batch_size, num_classes)
+        self.tcp = self.confidence(h)   # dim (6, 1)
+        o = self.classifier(h)          # dim (6, 1)
         return o
 
     

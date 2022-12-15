@@ -59,18 +59,6 @@ def get_loader(config, shuffle=True):
     def collate_fn(batch):
         '''
         Collate functions assume batch = [Dataset[i] for i in index_set]
-
-        Output
-        shape of sentences: (max_len, batch_size)
-        shape of visual: (max_len, batch_size, visual_size)
-        shape of acoustic: (max_len, batch_size, acoustic_size)
-        shape of labels: (batch_size, 1)
-        shape of emo_labels: (batch_size, 6)
-        shape of lengths: (batch_size)
-        shape of bert_sentences: (batch_size, max_len)
-        shape of bert_sentence_types: (batch_size, max_len)
-        shape of bert_sentence_att_mask: (batch_size, max_len)
-        shape of ids: (batch_size)
         '''
         # for later use we sort the batch in descending order of length
         batch = sorted(batch, key=lambda x: np.array(x[0][0]).shape[0], reverse=True)
