@@ -1,2 +1,4 @@
 __pycache__
 wandb
+checkpoints
+pre_trained_models
