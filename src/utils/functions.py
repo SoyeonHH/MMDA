@@ -107,3 +107,9 @@ class CMD(nn.Module):
         ss1 = torch.mean(torch.pow(sx1, k), 0)
         ss2 = torch.mean(torch.pow(sx2, k), 0)
         return self.matchnorm(ss1, ss2)
+
+
+def getBinaryTensor(imgTensor, boundary = 0.35):
+    one = torch.ones_like(imgTensor)
+    zero = torch.zeros_like(imgTensor)
+    return torch.where(imgTensor > boundary, one, zero)

@@ -143,20 +143,29 @@ class Solver(object):
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
 
-                y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                predicted_scores, predicted_labels = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
                 # y_tilde = y_tilde.squeeze()
+
+                # print("-" * 100)
+                # print("train true labels")
+                # print(emo_label)
+                # print("train predicted scores")
+                # print(predicted_scores)
+                # print("train predicted labels")
+                # print(predicted_labels)
+                # print("-" * 100)
                 
                 if self.train_config.data == "ur_funny":
                     y = y.squeeze()
 
                 emo_label = emo_label.type(torch.float)
 
-                cls_loss = criterion(y_tilde, emo_label)
+                cls_loss = criterion(predicted_scores, emo_label)
                 diff_loss = self.get_diff_loss()
                 domain_loss = self.get_domain_loss()
                 recon_loss = self.get_recon_loss()
                 cmd_loss = self.get_cmd_loss()
-                conf_loss = self.get_conf_loss(y_tilde, emo_label)
+                conf_loss = self.get_conf_loss(predicted_scores, emo_label)
                 
                 if self.train_config.use_cmd_sim:
                     similarity_loss = cmd_loss
@@ -189,7 +198,16 @@ class Solver(object):
             print(f"Epochs: {e}, Training loss: {train_loss_avg}")
 
             valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
-            
+
+            # print("-" * 100)
+            # print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
+            # print("preds:")
+            # print(preds)
+            # print("truths:")
+            # print(truths)
+            # print("-" * 100)
+
+
             print(f"Current patience: {curr_patience}, current trial: {num_trials}.")
             if valid_loss <= best_valid_loss:
                 best_valid_loss = valid_loss
@@ -205,6 +223,12 @@ class Solver(object):
                 save_model(self.train_config, self.model, self.train_config.data)
                 # Print best model results
                 eval_values = get_metrics(best_truths, best_results)
+                print("-"*50)
+                print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
+                    best_epoch, valid_loss, eval_values['acc'], eval_values['f1'], eval_values['precision'], eval_values['recall']))
+                # print("best results: ", best_results)
+                # print("best truths: ", best_truths)
+                print("-"*50)
             else:
                 curr_patience -= 1
                 if curr_patience <= -1:
@@ -216,18 +240,18 @@ class Solver(object):
                     lr_scheduler.step()
                     print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
-            wandb.log(
-                (
-                    {
-                        "train_loss": train_loss_avg,
-                        "valid_loss": valid_loss,
-                        "test_f_score": eval_values['f1'],
-                        "test_precision": eval_values['precision'],
-                        "test_recall": eval_values['recall'],
-                        "test_acc2": eval_values['acc']
-                    }
-                )
-            )
+            # wandb.log(
+            #     (
+            #         {
+            #             "train_loss": train_loss_avg,
+            #             "valid_loss": valid_loss,
+            #             "test_f_score": eval_values['f1'],
+            #             "test_precision": eval_values['precision'],
+            #             "test_recall": eval_values['recall'],
+            #             "test_acc2": eval_values['acc']
+            #         }
+            #     )
+            # )
 
         train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
@@ -279,22 +303,32 @@ class Solver(object):
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
 
-                y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                predicted_scores, predicted_labels = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
                 # y_tilde = y_tilde.squeeze()
+
+                # print("-" * 100)
+                # print("validation truth labels")
+                # print(emo_label)
+                # print("validation predicted scores")
+                # print(predicted_scores)
+                # print("validation predicted labels")
+                # print(predicted_labels)
+                # print("-" * 100)
+
                 
                 if self.train_config.data == "ur_funny":
                     y = y.squeeze()
                 
                 emo_label = emo_label.type(torch.float)
                 
-                cls_loss = self.criterion(y_tilde, emo_label)
+                cls_loss = self.criterion(predicted_scores, emo_label)
                 loss = cls_loss
 
                 eval_loss.append(loss.item())
 
                 # y_tilde = torch.argmax(y_tilde, dim=1)
                 # emo_label = torch.argmax(emo_label, dim=1)
-                y_pred.append(y_tilde.detach().cpu().numpy())
+                y_pred.append(predicted_labels.detach().cpu().numpy())
                 y_true.append(emo_label.detach().cpu().numpy())
 
 
