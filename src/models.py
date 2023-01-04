@@ -139,13 +139,15 @@ class MISA(nn.Module):
         self.confidence.add_module('confidence_layer_1', nn.Linear(in_features=config.hidden_size*6, out_features=6))
         self.confidence.add_module('confidence_layer_activation', nn.Sigmoid())
 
+        ##########################################
+        # label decoder
+        ##########################################
+        ## TODO: Implement label decoder module
+        ## label embedding shape: (batch_size, hidden_size*6, num_labels)
+        ## modality input shape: (batch_size, hidden_size*6, 1)
+
 
         self.classifier = nn.Sequential()
-        # self.classifier.add_module('classifier_layer_1', nn.Linear(in_features=self.config.hidden_size*6, out_features=self.config.hidden_size*3))
-        # self.classifier.add_module('classifier_layer_1_dropout', nn.Dropout(dropout_rate))
-        # self.classifier.add_module('classifier_layer_1_activation', self.activation)
-        # self.classifier.add_module('classifier_layer_3', nn.Linear(in_features=self.config.hidden_size*3, out_features=output_size))
-        # self.classifier.add_module('classifier_layer_3_activation', nn.Sigmoid())
         self.classifier.add_module('classifier_layer', nn.Linear(in_features=self.config.hidden_size*6, out_features=output_size))
         self.classifier.add_module('classifier_layer_dropout', nn.Dropout(dropout_rate))
         self.classifier.add_module('classifier_layer_activation', nn.Sigmoid())
