@@ -24,7 +24,7 @@ import time
 import datetime
 import wandb
 
-
+os.chdir(os.getcwd())
 torch.manual_seed(123)
 torch.cuda.manual_seed_all(123)
 
