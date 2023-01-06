@@ -12,11 +12,9 @@ def dense(y):
 	return label_y
 
 def get_accuracy(y, y_pre):
-	# print('metric_acc:  ' + str(round(metrics.accuracy_score(y, y_pre),4)))
-	y, y_pre = y.tolist(), y_pre.tolist()
-	sambles = len(y)
+	samples = len(y)
 	count = 0.0
-	for i in range(sambles):
+	for i in range(samples):
 		y_true = 0
 		all_y = 0
 		for j in range(len(y[i])):
@@ -28,48 +26,28 @@ def get_accuracy(y, y_pre):
 			all_y = 1
 
 		count += float(y_true) / float(all_y)
-	acc = float(count) / float(sambles)
-	acc = round(acc,4)
+	acc = float(count) / float(samples)
+	acc = round(acc, 4)
 	return acc
 
 def get_metrics(y, y_pre):
 	"""
-	:param y:1071*6
-	:param y_pre: 1071*6
-	:return:
+	:param y:1871*6
+	:param y_pre: 1871*6
+	:return: acc, macro_f1, macro_precision, macro_recall
 	"""
 	# y = y.cpu().detach().numpy()
 	# y_pre = y_pre.cpu().detach().numpy()
 	test_labels = dense(y)
 	test_pred = dense(y_pre)
 
-	samples = len(y)
-	macro_f1s, macro_precisions, macro_recalls = [], [], []
-	for s in range(samples):
-		for c in range(len(y_pre[s])):
-			if y_pre[s][c] > 0.5:
-				y_pre[s][c] = 1.0
-			else:
-				y_pre[s][c] = 0.0
-		macro_f1 = metrics.f1_score(y[s], y_pre[s], average='macro')
-		macro_precision = metrics.precision_score(y[s], y_pre[s], average='macro')
-		macro_recall = metrics.recall_score(y[s], y_pre[s], average='macro')
-		macro_f1s.append(macro_f1)
-		macro_precisions.append(macro_precision)
-		macro_recalls.append(macro_recall)
+	test_labels = y
+	test_pred = y_pre
 
-	macro_f1 = np.mean(macro_f1s)
-	macro_precision = np.mean(macro_precisions)
-	macro_recall = np.mean(macro_recalls)
-	acc = get_accuracy(y, y_pre)
+	acc = get_accuracy(test_labels, test_pred)
+	macro_f1 = metrics.f1_score(test_labels, test_pred, average='macro')
+	macro_precision = metrics.precision_score(test_labels, test_pred, average='macro')
+	macro_recall = metrics.recall_score(test_labels, test_pred, average='macro')
 
-	target_names = ['happy', 'sad', 'anger', 'surprise', 'disgust', 'fear']
-
-	print("--------------------------------------------------")
-	print(metrics.classification_report(y, y_pre,target_names=target_names, digits=4))
-	print("micro_precision, micro_precison, micro_recall")
-	f1 = metrics.f1_score(y, y_pre, average='micro')
-	precision = metrics.precision_score(y, y_pre, average='micro')
-	recall = metrics.recall_score(y, y_pre, average='micro')
-	print(""+str(round(precision,4))+"\t"+str(round(recall,4))+"\t"+str(round(f1,4)))
-	return {'f1': f1, 'precision': precision, 'recall': recall, 'acc': acc}
+	return {'acc': acc, 'f1': macro_f1, 'precision': macro_precision, 'recall': macro_recall}
+	

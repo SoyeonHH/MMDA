@@ -51,6 +51,7 @@ class Solver(object):
             self.device = torch.device("cuda")
         else:
             self.device = torch.device("cpu")
+        print(f"current device: {self.device}")
     
     # @time_desc_decorator('Build Graph')
     def build(self, cuda=True):
@@ -110,7 +111,7 @@ class Solver(object):
         self.loss_cmd = CMD()
 
         # Confidence regression loss
-        self.loss_mcp = nn.BCELoss(reduction="mean")
+        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
         self.loss_tcp = nn.MSELoss(reduction="mean")
         
         best_valid_loss = float('inf')
@@ -127,6 +128,10 @@ class Solver(object):
             train_loss_sp = []
             train_loss_conf = []
             train_loss = []
+
+            # For label decoder inputs
+            # label_input, label_mask = self.train_data_loader.dataset.get_label_input()
+
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
@@ -143,20 +148,29 @@ class Solver(object):
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
 
-                y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                predicted_scores, predicted_labels = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
                 # y_tilde = y_tilde.squeeze()
+
+                # print("-" * 100)
+                # print("train true labels")
+                # print(emo_label)
+                # print("train predicted scores")
+                # print(predicted_scores)
+                # print("train predicted labels")
+                # print(predicted_labels)
+                # print("-" * 100)
                 
                 if self.train_config.data == "ur_funny":
                     y = y.squeeze()
 
                 emo_label = emo_label.type(torch.float)
 
-                cls_loss = criterion(y_tilde, emo_label)
+                cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 diff_loss = self.get_diff_loss()
                 domain_loss = self.get_domain_loss()
                 recon_loss = self.get_recon_loss()
                 cmd_loss = self.get_cmd_loss()
-                conf_loss = self.get_conf_loss(y_tilde, emo_label)
+                conf_loss = self.get_conf_loss(predicted_scores, emo_label)
                 
                 if self.train_config.use_cmd_sim:
                     similarity_loss = cmd_loss
@@ -188,7 +202,16 @@ class Solver(object):
             print(f"Training loss: {round(np.mean(train_loss), 4)}")
 
             valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
-            
+
+            # print("-" * 100)
+            # print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
+            # print("preds:")
+            # print(preds)
+            # print("truths:")
+            # print(truths)
+            # print("-" * 100)
+
+
             print(f"Current patience: {curr_patience}, current trial: {num_trials}.")
             if valid_loss <= best_valid_loss:
                 best_valid_loss = valid_loss
@@ -204,10 +227,13 @@ class Solver(object):
                 save_model(self.train_config, self.model, self.train_config.data)
                 # Print best model results
                 eval_values = get_metrics(best_truths, best_results)
-                # if self.train_config.use_confidNet:
-                #     eval_values = eval_binary(best_results, best_truths)
-                # else:
-                #     eval_values = eval_mosei_senti(best_results, best_truths, True)
+                print("-"*50)
+                print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
+                    best_epoch, valid_loss, eval_values['acc'], eval_values['f1'], eval_values['precision'], eval_values['recall']))
+                # print("best results: ", best_results)
+                # print("best truths: ", best_truths)
+                print("-"*50)
+
             else:
                 curr_patience -= 1
                 if curr_patience <= -1:
@@ -219,18 +245,19 @@ class Solver(object):
                     lr_scheduler.step()
                     print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
-            wandb.log(
-                (
-                    {
-                        "train_loss": train_loss,
-                        "valid_loss": valid_loss,
-                        "test_f_score": eval_values['f1'],
-                        "test_precision": eval_values['precision'],
-                        "test_recall": eval_values['recall'],
-                        "test_acc2": eval_values['acc']
-                    }
-                )
-            )
+            # wandb.log(
+            #     (
+            #         {
+            #             "train_loss": train_loss_avg,
+            #             "valid_loss": valid_loss,
+            #             "test_f_score": eval_values['f1'],
+            #             "test_precision": eval_values['precision'],
+            #             "test_recall": eval_values['recall'],
+            #             "test_acc2": eval_values['acc']
+            #         }
+            #     )
+            # )
+
 
         train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
@@ -276,19 +303,33 @@ class Solver(object):
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
 
-                y_tilde = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                predicted_scores, predicted_labels = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
                 # y_tilde = y_tilde.squeeze()
+
+                # print("-" * 100)
+                # print("validation truth labels")
+                # print(emo_label)
+                # print("validation predicted scores")
+                # print(predicted_scores)
+                # print("validation predicted labels")
+                # print(predicted_labels)
+                # print("-" * 100)
+
                 
                 if self.train_config.data == "ur_funny":
                     y = y.squeeze()
                 
                 emo_label = emo_label.type(torch.float)
                 
-                cls_loss = self.criterion(y_tilde, emo_label)
+                cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 loss = cls_loss
 
                 eval_loss.append(loss.item())
-                y_pred.append(y_tilde.detach().cpu().numpy())
+
+                # y_tilde = torch.argmax(y_tilde, dim=1)
+                # emo_label = torch.argmax(emo_label, dim=1)
+                y_pred.append(predicted_labels.detach().cpu().numpy())
+
                 y_true.append(emo_label.detach().cpu().numpy())
 
 
@@ -299,6 +340,21 @@ class Solver(object):
         accuracy = get_accuracy(y_true, y_pred)
 
         return eval_loss, accuracy, y_pred, y_true
+
+    
+    def get_cls_loss(self, predicted_scores, emo_label):
+        if self.train_config.data == "ur_funny":
+            emo_label = emo_label.squeeze()
+        
+        emo_label = emo_label.type(torch.float)
+
+        predicted_scores, emo_label = torch.permute(predicted_scores, (1, 0)), torch.permute(emo_label, (1, 0))
+
+        cls_loss = 0.0
+        for i in range(emo_label.size(0)):
+            cls_loss += self.criterion(predicted_scores[i], emo_label[i])
+
+        return cls_loss
 
 
     def get_domain_loss(self,):
@@ -365,8 +421,14 @@ class Solver(object):
         return loss
 
     def get_conf_loss(self, pred, truth):
-        tcp = 0
-        for i in range(6):
-            tcp += self.loss_tcp(self.model.tcp, (truth[i] * pred[i]))
-        tcp_loss = torch.round(torch.div(tcp, 6.0), decimals=4)
-        return tcp_loss + self.loss_mcp(pred, truth)
+        tcp_loss = 0.0
+        mcp_loss = 0.0
+
+        pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0))
+        tcp = torch.permute(self.model.tcp, (1, 0))
+
+        for i in range(truth.size(0)):
+            tcp_loss += torch.div(self.loss_tcp(tcp[i], (truth[i] * pred[i])), torch.count_nonzero(truth[i]))
+            mcp_loss += torch.div(self.loss_mcp(pred[i], truth[i]), torch.count_nonzero(truth[i]))
+
+        return tcp_loss + mcp_loss

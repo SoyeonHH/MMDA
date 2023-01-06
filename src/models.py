@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 from transformers import BertModel, BertConfig
 
 from utils import to_gpu, to_cpu
-from utils import ReverseLayerF
+from utils import ReverseLayerF, getBinaryTensor
 
 
 class MISA(nn.Module):
@@ -139,13 +139,18 @@ class MISA(nn.Module):
         self.confidence.add_module('confidence_layer_1', nn.Linear(in_features=config.hidden_size*6, out_features=6))
         self.confidence.add_module('confidence_layer_activation', nn.Sigmoid())
 
+        ##########################################
+        # label decoder
+        ##########################################
+        ## TODO: Implement label decoder module
+        ## label embedding shape: (batch_size, hidden_size*6, num_labels)
+        ## modality input shape: (batch_size, hidden_size*6, 1)
+
 
         self.classifier = nn.Sequential()
-        self.classifier.add_module('classifier_layer_1', nn.Linear(in_features=self.config.hidden_size*6, out_features=self.config.hidden_size*3))
-        self.classifier.add_module('classifier_layer_1_dropout', nn.Dropout(dropout_rate))
-        self.classifier.add_module('classifier_layer_1_activation', self.activation)
-        self.classifier.add_module('classifier_layer_3', nn.Linear(in_features=self.config.hidden_size*3, out_features=output_size))
-        self.classifier.add_module('classifier_layer_3_activation', nn.Sigmoid())
+        self.classifier.add_module('classifier_layer', nn.Linear(in_features=self.config.hidden_size*6, out_features=output_size))
+        self.classifier.add_module('classifier_layer_dropout', nn.Dropout(dropout_rate))
+        self.classifier.add_module('classifier_layer_activation', nn.Sigmoid())
 
         self.tlayer_norm = nn.LayerNorm((hidden_sizes[0]*2,))
         self.vlayer_norm = nn.LayerNorm((hidden_sizes[1]*2,))
@@ -239,9 +244,11 @@ class MISA(nn.Module):
         h = self.transformer_encoder(h)
         h = torch.cat((h[0], h[1], h[2], h[3], h[4], h[5]), dim=1)
 
-        self.tcp = self.confidence(h)   # dim (6, 1)
-        o = self.classifier(h)          # dim (6, 1)
-        return o
+        self.tcp = self.confidence(h)   # shape (batch_size, 6)
+        predicted_scores = self.classifier(h)          # shape (batch_size, num_classes)
+        predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
+        return predicted_scores, predicted_labels
+
 
     
     def reconstruct(self,):

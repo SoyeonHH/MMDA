@@ -148,6 +148,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--reverse_grad_weight', type=float, default=1.0)
     # Selectin activation from 'elu', "hardshrink", "hardtanh", "leakyrelu", "prelu", "relu", "rrelu", "tanh"
     parser.add_argument('--activation', type=str, default=dataset_default_hp['activate'])
+    parser.add_argument('--threshold', type=float, default=0.35)
 
     # Model
     parser.add_argument('--model', type=str,
