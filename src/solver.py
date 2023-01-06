@@ -51,6 +51,7 @@ class Solver(object):
             self.device = torch.device("cuda")
         else:
             self.device = torch.device("cpu")
+        print(f"current device: {self.device}")
     
     # @time_desc_decorator('Build Graph')
     def build(self, cuda=True):
@@ -110,7 +111,7 @@ class Solver(object):
         self.loss_cmd = CMD()
 
         # Confidence regression loss
-        self.loss_mcp = nn.BCELoss(reduction="mean")
+        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
         self.loss_tcp = nn.MSELoss(reduction="mean")
         
         best_valid_loss = float('inf')
@@ -127,6 +128,10 @@ class Solver(object):
             train_loss_sp = []
             train_loss_conf = []
             train_loss = []
+
+            # For label decoder inputs
+            # label_input, label_mask = self.train_data_loader.dataset.get_label_input()
+
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
@@ -160,7 +165,7 @@ class Solver(object):
 
                 emo_label = emo_label.type(torch.float)
 
-                cls_loss = criterion(predicted_scores, emo_label)
+                cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 diff_loss = self.get_diff_loss()
                 domain_loss = self.get_domain_loss()
                 recon_loss = self.get_recon_loss()
@@ -321,7 +326,7 @@ class Solver(object):
                 
                 emo_label = emo_label.type(torch.float)
                 
-                cls_loss = self.criterion(predicted_scores, emo_label)
+                cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 loss = cls_loss
 
                 eval_loss.append(loss.item())
@@ -339,6 +344,21 @@ class Solver(object):
         accuracy = get_accuracy(y_true, y_pred)
 
         return eval_loss, accuracy, y_pred, y_true
+
+    
+    def get_cls_loss(self, predicted_scores, emo_label):
+        if self.train_config.data == "ur_funny":
+            emo_label = emo_label.squeeze()
+        
+        emo_label = emo_label.type(torch.float)
+
+        predicted_scores, emo_label = torch.permute(predicted_scores, (1, 0)), torch.permute(emo_label, (1, 0))
+
+        cls_loss = 0.0
+        for i in range(emo_label.size(0)):
+            cls_loss += self.criterion(predicted_scores[i], emo_label[i])
+
+        return cls_loss
 
 
     def get_domain_loss(self,):
@@ -405,8 +425,14 @@ class Solver(object):
         return loss
 
     def get_conf_loss(self, pred, truth):
-        tcp = 0
-        for i in range(6):
-            tcp += self.loss_tcp(self.model.tcp, (truth[i] * pred[i]))
-        tcp_loss = torch.round(torch.div(tcp, 6.0), decimals=4)
-        return tcp_loss + self.loss_mcp(pred, truth)
+        tcp_loss = 0.0
+        mcp_loss = 0.0
+
+        pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0))
+        tcp = torch.permute(self.model.tcp, (1, 0))
+
+        for i in range(truth.size(0)):
+            tcp_loss += torch.div(self.loss_tcp(tcp[i], (truth[i] * pred[i])), torch.count_nonzero(truth[i]))
+            mcp_loss += torch.div(self.loss_mcp(pred[i], truth[i]), torch.count_nonzero(truth[i]))
+
+        return tcp_loss + mcp_loss
