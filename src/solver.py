@@ -199,8 +199,7 @@ class Solver(object):
                 
 
             train_losses.append(train_loss)
-            train_loss_avg = round(np.mean(train_loss), 4)
-            print(f"Epochs: {e}, Training loss: {train_loss_avg}")
+            print(f"Training loss: {round(np.mean(train_loss), 4)}")
 
             valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
 
@@ -234,6 +233,7 @@ class Solver(object):
                 # print("best results: ", best_results)
                 # print("best truths: ", best_truths)
                 print("-"*50)
+
             else:
                 curr_patience -= 1
                 if curr_patience <= -1:
@@ -258,16 +258,11 @@ class Solver(object):
             #     )
             # )
 
+
         train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results)
-        best_acc, best_f1, best_precision, best_recall = \
-             eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']
-        print(f'Accuracy: {best_acc}')
-        print(f'F1 score: {best_f1}')
-        print(f'Precision: {best_precision}')
-        print(f'Recall: {best_recall}')
         # total_end = time.time()
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
@@ -334,12 +329,13 @@ class Solver(object):
                 # y_tilde = torch.argmax(y_tilde, dim=1)
                 # emo_label = torch.argmax(emo_label, dim=1)
                 y_pred.append(predicted_labels.detach().cpu().numpy())
+
                 y_true.append(emo_label.detach().cpu().numpy())
 
 
         eval_loss = np.mean(eval_loss)
-        y_true = np.concatenate(y_true, axis=0).squeeze()   # (1871, 6)
-        y_pred = np.concatenate(y_pred, axis=0).squeeze()   # (1871, 6)
+        y_true = np.concatenate(y_true, axis=0).squeeze()
+        y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
         accuracy = get_accuracy(y_true, y_pred)
 

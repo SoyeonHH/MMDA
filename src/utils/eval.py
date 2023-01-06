@@ -3,6 +3,14 @@ from sklearn import metrics
 import numpy as np
 import os
 
+def dense(y):
+	label_y = []
+	for i in range(len(y)):
+		for j in range(len(y[i])):
+			label_y.append(y[i][j])
+
+	return label_y
+
 def get_accuracy(y, y_pre):
 	samples = len(y)
 	count = 0.0
@@ -28,6 +36,10 @@ def get_metrics(y, y_pre):
 	:param y_pre: 1871*6
 	:return: acc, macro_f1, macro_precision, macro_recall
 	"""
+	# y = y.cpu().detach().numpy()
+	# y_pre = y_pre.cpu().detach().numpy()
+	test_labels = dense(y)
+	test_pred = dense(y_pre)
 
 	test_labels = y
 	test_pred = y_pre

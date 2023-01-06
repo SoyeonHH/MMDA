@@ -249,6 +249,7 @@ class MISA(nn.Module):
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
         return predicted_scores, predicted_labels
 
+
     
     def reconstruct(self,):
 
