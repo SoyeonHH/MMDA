@@ -188,6 +188,8 @@ class Solver(object):
                 train_loss.append(loss.item())
                 train_loss_sim.append(similarity_loss.item())
                 train_loss_conf.append(conf_loss.item())
+
+                wandb.log({"train_loss": loss.item()})
                 
 
             train_losses.append(train_loss)
@@ -236,7 +238,6 @@ class Solver(object):
             wandb.log(
                 (
                     {
-                        "train_loss": train_loss,
                         "valid_loss": valid_loss,
                         "test_f_score": eval_values['f1'],
                         "test_precision": eval_values['precision'],

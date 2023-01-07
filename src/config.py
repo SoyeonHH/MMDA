@@ -48,7 +48,7 @@ mosi_hp = {
 
 mosei_hp = {
     'activate': 'leakyrelu',
-    'batch_size': 4,
+    'batch_size': 16,
     'alpha': 0.7,
     'beta': 0.3,
     'gamma': 0.7,
