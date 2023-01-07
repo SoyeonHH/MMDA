@@ -11,15 +11,15 @@ import torch.nn as nn
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # path to a pretrained word embedding file
-# word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
-word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
+word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
+# word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
-# sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
-# data_dir = Path('/home/iknow/workspace/multimodal')
-sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
-data_dir = Path('/data1/multimodal')
+sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
+data_dir = Path('/home/iknow/workspace/multimodal')
+# sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
+# data_dir = Path('/data1/multimodal')
 data_dict = {'mosi': data_dir.joinpath('MOSI'), 'mosei': data_dir.joinpath('MOSEI')}
 optimizer_dict = {'RMSprop': optim.RMSprop, 'Adam': optim.Adam}
 activation_dict = {'elu': nn.ELU, "hardshrink": nn.Hardshrink, "hardtanh": nn.Hardtanh,
@@ -48,7 +48,7 @@ mosi_hp = {
 
 mosei_hp = {
     'activate': 'leakyrelu',
-    'batch_size': 16,
+    'batch_size': 4,
     'alpha': 0.7,
     'beta': 0.3,
     'gamma': 0.7,
@@ -108,6 +108,8 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
+    parser.add_argument('--use_confidNet', type=str2bool, default=False)
+    parser.add_argument('--device', type=str, default='cuda')
 
     # Bert
     parser.add_argument('--use_bert', type=str2bool, default=True)
@@ -153,7 +155,6 @@ def get_config(parse=True, **optional_kwargs):
     # Model
     parser.add_argument('--model', type=str,
                         default='MISA', help='one of {MISA, }')
-    parser.add_argument('--use_confidNet', type=str2bool, default=False)
 
     # Parse arguments
     if parse:

@@ -37,8 +37,8 @@ def main():
 
     # Setting training log
     args = get_config()
-    # wandb.init(project="MISA-classification")
-    # wandb.config.update(args)
+    wandb.init(project="MISA-classification")
+    wandb.config.update(args)
     args.data='mosei'
 
     # Setting random seed
