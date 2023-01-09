@@ -11,15 +11,15 @@ import torch.nn as nn
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # path to a pretrained word embedding file
-word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
-# word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
+# word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
+word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
-sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
-data_dir = Path('/home/iknow/workspace/multimodal')
-# sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
-# data_dir = Path('/data1/multimodal')
+# sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
+# data_dir = Path('/home/iknow/workspace/multimodal')
+sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
+data_dir = Path('/data1/multimodal')
 data_dict = {'mosi': data_dir.joinpath('MOSI'), 'mosei': data_dir.joinpath('MOSEI')}
 optimizer_dict = {'RMSprop': optim.RMSprop, 'Adam': optim.Adam}
 activation_dict = {'elu': nn.ELU, "hardshrink": nn.Hardshrink, "hardtanh": nn.Hardtanh,
@@ -118,22 +118,22 @@ def get_config(parse=True, **optional_kwargs):
     # Data
     parser.add_argument('--data', type=str, default='mosei')
 
-    _args = parser.parse_args()
-    dataset_default_hp = mosi_hp if _args.data.strip() == 'mosi' else mosei_hp
+    # _args = parser.parse_args()
+    # dataset_default_hp = mosi_hp if _args.data.strip() == 'mosi' else mosei_hp
 
     # Train
     time_now = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     parser.add_argument('--name', type=str, default=f"{time_now}")
     parser.add_argument('--num_classes', type=int, default=6)   # Fixed to classify
-    parser.add_argument('--batch_size', type=int, default=dataset_default_hp['batch_size'])
+    parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--eval_batch_size', type=int, default=10)
     parser.add_argument('--n_epoch', type=int, default=40)
     parser.add_argument('--patience', type=int, default=6)
 
-    parser.add_argument('--diff_weight', type=float, default=dataset_default_hp['beta'])
-    parser.add_argument('--sim_weight', type=float, default=dataset_default_hp['alpha'])
+    parser.add_argument('--diff_weight', type=float, default=0.3)   # beta
+    parser.add_argument('--sim_weight', type=float, default=0.7)    # alpha
     parser.add_argument('--sp_weight', type=float, default=0.0)
-    parser.add_argument('--recon_weight', type=float, default=dataset_default_hp['gamma'])
+    parser.add_argument('--recon_weight', type=float, default=0.7)  # gamma
     parser.add_argument('--conf_weight', type=float, default=0.3)
 
     parser.add_argument('--learning_rate', type=float, default=1e-4)
@@ -146,10 +146,10 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--rnncell', type=str, default='lstm')
     parser.add_argument('--embedding_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=128)
-    parser.add_argument('--dropout', type=float, default=dataset_default_hp['dropout'])
+    parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument('--reverse_grad_weight', type=float, default=1.0)
     # Selectin activation from 'elu', "hardshrink", "hardtanh", "leakyrelu", "prelu", "relu", "rrelu", "tanh"
-    parser.add_argument('--activation', type=str, default=dataset_default_hp['activate'])
+    parser.add_argument('--activation', type=str, default='leakyrelu')
     parser.add_argument('--threshold', type=float, default=0.35)
 
     # Model
