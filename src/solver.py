@@ -27,6 +27,9 @@ import time
 import datetime
 import wandb
 
+import hypertune
+hpt = hypertune.HyperTune()
+
 torch.manual_seed(123)
 torch.cuda.manual_seed_all(123)
 
@@ -194,6 +197,10 @@ class Solver(object):
             train_avg_loss = round(np.mean(train_loss), 4)
             print(f"Training loss: {train_avg_loss}")
 
+            ##########################################
+            # model evaluation with dev set
+            ##########################################
+
             valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
 
             print("-" * 100)
@@ -223,30 +230,67 @@ class Solver(object):
                 # print("best truths: ", best_truths)
                 print("-"*50)
 
-            else:
-                curr_patience -= 1
-                if curr_patience <= -1:
-                    print("Running out of patience, loading previous best model.")
-                    num_trials -= 1
-                    curr_patience = patience
-                    self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
-                    self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
-                    lr_scheduler.step()
-                    print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
+            # else:
+            #     curr_patience -= 1
+            #     if curr_patience <= -1:
+            #         print("Running out of patience, loading previous best model.")
+            #         num_trials -= 1
+            #         curr_patience = patience
+            #         self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
+            #         self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
+            #         lr_scheduler.step()
+            #         print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
-            wandb.log(
-                (
-                    {
-                        "train_loss": train_avg_loss,
-                        "valid_loss": valid_loss,
-                        "test_f_score": eval_values['f1'],
-                        "test_precision": eval_values['precision'],
-                        "test_recall": eval_values['recall'],
-                        "test_acc2": eval_values['acc']
-                    }
+            if self.train_config.eval_mode == "macro":
+                wandb.log(
+                    (
+                        {
+                            "train_loss": train_avg_loss,
+                            "valid_loss": valid_loss,
+                            "test_f_score": eval_values['f1'],
+                            "test_precision": eval_values['precision'],
+                            "test_recall": eval_values['recall'],
+                            "test_acc2": eval_values['acc']
+                        }
+                    )
                 )
+            elif self.train_config.eval_mode == "micro":
+                wandb.log(
+                    (
+                        {
+                            "train_loss": train_avg_loss,
+                            "valid_loss": valid_loss,
+                            "test_f_score": eval_values['micro_f1'],
+                            "test_precision": eval_values['micro_precision'],
+                            "test_recall": eval_values['micro_recall'],
+                            "test_acc2": eval_values['acc']
+                        }
+                    )
+                )
+            elif self.train_config.eval_mode == "weighted":
+                wandb.log(
+                    (
+                        {
+                            "train_loss": train_avg_loss,
+                            "valid_loss": valid_loss,
+                            "test_f_score": eval_values['weighted_f1'],
+                            "test_precision": eval_values['weighted_precision'],
+                            "test_recall": eval_values['weighted_recall'],
+                            "test_acc2": eval_values['acc']
+                        }
+                    )
+                )
+
+            # hyperparameter tuning report
+            hpt.report_hyperparameter_tuning_metric(
+                hyperparameter_metric_tag="accuracy",
+                metric_value=eval_values['acc'],
+                global_step=e
             )
 
+        ##########################################
+        # Test
+        ##########################################
 
         train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)

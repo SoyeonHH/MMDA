@@ -59,8 +59,8 @@ def main():
 
     # Creating pytorch dataloaders
     train_data_loader = get_loader(train_config, shuffle = True)
-    dev_data_loader = get_loader(dev_config, shuffle = True)
-    test_data_loader = get_loader(test_config, shuffle = True)
+    dev_data_loader = get_loader(dev_config, shuffle = False)
+    test_data_loader = get_loader(test_config, shuffle = False)
 
     # Solver is a wrapper for model traiing and testing
     solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
