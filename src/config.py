@@ -110,6 +110,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--use_confidNet', type=str2bool, default=False)
     parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--eval_mode', type=str, default='macro', help='one of {micro, macro, weighted}')
 
     # Bert
     parser.add_argument('--use_bert', type=str2bool, default=True)
