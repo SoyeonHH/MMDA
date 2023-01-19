@@ -57,8 +57,7 @@ class Solver(object):
         print(f"current device: {self.device}")
     
     # @time_desc_decorator('Build Graph')
-    def build(self, cuda=True):
-
+    def build(self, cuda=True): 
         if self.model is None:
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
@@ -112,10 +111,6 @@ class Solver(object):
         # self.loss_recon = MSE()
         self.loss_recon = nn.MSELoss(reduction="mean")
         self.loss_cmd = CMD()
-
-        # Confidence regression loss
-        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
-        self.loss_tcp = nn.MSELoss(reduction="mean")
         
         best_valid_loss = float('inf')
         best_train_loss = float('inf')
@@ -138,6 +133,7 @@ class Solver(object):
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                label_input, label_mask = self.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -150,8 +146,10 @@ class Solver(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
+                label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-                predicted_scores, predicted_labels = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                predicted_scores, predicted_labels, _ = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
+                          label_input, label_mask, groundTruth_labels=emo_label, training=True)
                 # y_tilde = y_tilde.squeeze()
 
                 
@@ -165,7 +163,7 @@ class Solver(object):
                 domain_loss = self.get_domain_loss()
                 recon_loss = self.get_recon_loss()
                 cmd_loss = self.get_cmd_loss()
-                conf_loss = self.get_conf_loss(predicted_scores, emo_label)
+                # conf_loss = self.get_conf_loss(predicted_scores, emo_label)
                 
                 if self.train_config.use_cmd_sim:
                     similarity_loss = cmd_loss
@@ -177,8 +175,8 @@ class Solver(object):
                     self.train_config.sim_weight * similarity_loss + \
                     self.train_config.recon_weight * recon_loss
 
-                if self.train_config.use_confidNet:
-                    loss += self.train_config.conf_weight * conf_loss
+                # if self.train_config.use_confidNet:
+                #     loss += self.train_config.conf_weight * conf_loss
 
                 loss.backward()
                 
@@ -190,18 +188,21 @@ class Solver(object):
                 train_loss_recon.append(recon_loss.item())
                 train_loss.append(loss.item())
                 train_loss_sim.append(similarity_loss.item())
-                train_loss_conf.append(conf_loss.item())
-                
+                # train_loss_conf.append(conf_loss.item())
+            
 
             train_losses.append(train_loss)
             train_avg_loss = round(np.mean(train_loss), 4)
             print(f"Training loss: {train_avg_loss}")
 
+            # train tcp
+            self.train_tcp()
+
             ##########################################
             # model evaluation with dev set
             ##########################################
 
-            valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
+            valid_loss, valid_loss,conf, valid_acc, preds, truths, tcp = self.eval(mode="dev")
 
             print("-" * 100)
             print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
@@ -220,7 +221,8 @@ class Solver(object):
                 torch.save(self.optimizer.state_dict(), f'checkpoints/optim_{self.train_config.name}.std')
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
-                save_model(self.train_config, self.model, self.train_config.data)
+                save_model(self.train_config, self.model)
+                save_tcp(self.train_config, tcp, name="fusion_representation")
                 # Print best model results
                 eval_values = get_metrics(best_truths, best_results)
                 print("-"*50)
@@ -228,6 +230,7 @@ class Solver(object):
                     best_epoch, valid_loss, eval_values['acc'], eval_values['f1'], eval_values['precision'], eval_values['recall']))
                 # print("best results: ", best_results)
                 # print("best truths: ", best_truths)
+                print("Model Confidence: ", tcp)
                 print("-"*50)
 
             # else:
@@ -241,45 +244,45 @@ class Solver(object):
             #         lr_scheduler.step()
             #         print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
-            if self.train_config.eval_mode == "macro":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['f1'],
-                            "test_precision": eval_values['precision'],
-                            "test_recall": eval_values['recall'],
-                            "test_acc2": eval_values['acc']
-                        }
-                    )
-                )
-            elif self.train_config.eval_mode == "micro":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['micro_f1'],
-                            "test_precision": eval_values['micro_precision'],
-                            "test_recall": eval_values['micro_recall'],
-                            "test_acc2": eval_values['acc']
-                        }
-                    )
-                )
-            elif self.train_config.eval_mode == "weighted":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['weighted_f1'],
-                            "test_precision": eval_values['weighted_precision'],
-                            "test_recall": eval_values['weighted_recall'],
-                            "test_acc2": eval_values['acc']
-                        }
-                    )
-                )
+            # if self.train_config.eval_mode == "macro":
+            #     wandb.log(
+            #         (
+            #             {
+            #                 "train_loss": train_avg_loss,
+            #                 "valid_loss": valid_loss,
+            #                 "test_f_score": eval_values['f1'],
+            #                 "test_precision": eval_values['precision'],
+            #                 "test_recall": eval_values['recall'],
+            #                 "test_acc2": eval_values['acc']
+            #             }
+            #         )
+            #     )
+            # elif self.train_config.eval_mode == "micro":
+            #     wandb.log(
+            #         (
+            #             {
+            #                 "train_loss": train_avg_loss,
+            #                 "valid_loss": valid_loss,
+            #                 "test_f_score": eval_values['micro_f1'],
+            #                 "test_precision": eval_values['micro_precision'],
+            #                 "test_recall": eval_values['micro_recall'],
+            #                 "test_acc2": eval_values['acc']
+            #             }
+            #         )
+            #     )
+            # elif self.train_config.eval_mode == "weighted":
+            #     wandb.log(
+            #         (
+            #             {
+            #                 "train_loss": train_avg_loss,
+            #                 "valid_loss": valid_loss,
+            #                 "test_f_score": eval_values['weighted_f1'],
+            #                 "test_precision": eval_values['weighted_precision'],
+            #                 "test_recall": eval_values['weighted_recall'],
+            #                 "test_acc2": eval_values['acc']
+            #             }
+            #         )
+            #     )
 
             # hyperparameter tuning report
             hpt.report_hyperparameter_tuning_metric(
@@ -292,7 +295,8 @@ class Solver(object):
         # Test
         ##########################################
 
-        train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
+        print("model training is finished.")
+        train_loss, train_loss_conf, acc, test_preds, test_truths, test_tcp = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results)
@@ -311,9 +315,11 @@ class Solver(object):
     def eval(self,mode=None, to_print=False):
         assert(mode is not None)
         self.model.eval()
+        self.confidence_model.eval()
 
         y_true, y_pred = [], []
-        eval_loss, eval_loss_diff = [], []
+        eval_loss, eval_loss_diff, eval_conf_loss = [], [], []
+        tcp = []
 
         if mode == "dev":
             dataloader = self.dev_data_loader
@@ -329,7 +335,10 @@ class Solver(object):
 
             for batch in dataloader:
                 self.model.zero_grad()
+                self.confidence_model.zero_grad()
+
                 t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                label_input, label_mask = self.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -341,44 +350,121 @@ class Solver(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
+                label_input = to_gpu(label_input)
+                label_mask = to_gpu(label_mask)
 
-                predicted_scores, predicted_labels = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask)
+                predicted_scores, predicted_labels, hidden_state = \
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, \
+                        label_input, label_mask, groundTruth_labels=emo_label, training=False)                
                 # y_tilde = y_tilde.squeeze()
 
                 if self.train_config.data == "ur_funny":
                     y = y.squeeze()
                 
                 emo_label = emo_label.type(torch.float)
+
+                predicted_tcp = self.confidence_model(hidden_state)
+                predicted_tcp = predicted_tcp.squeeze()
                 
                 cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 loss = cls_loss
 
+                conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
+
                 eval_loss.append(loss.item())
+                eval_conf_loss.append(conf_loss.item())
 
                 # y_tilde = torch.argmax(y_tilde, dim=1)
                 # emo_label = torch.argmax(emo_label, dim=1)
                 y_pred.append(predicted_labels.detach().cpu().numpy())
                 y_true.append(emo_label.detach().cpu().numpy())
+                tcp.append(predicted_tcp.detach().cpu().numpy())
 
 
         eval_loss = np.mean(eval_loss)
+        eval_conf_loss = np.mean(eval_conf_loss)
         y_true = np.concatenate(y_true, axis=0).squeeze()   # (1871, 6)
         y_pred = np.concatenate(y_pred, axis=0).squeeze()   # (1871, 6)
+        tcp = np.concatenate(tcp).squeeze()   # (1871, 1)
 
         accuracy = get_accuracy(y_true, y_pred)
 
-        return eval_loss, accuracy, y_pred, y_true
+        return eval_loss, eval_conf_loss, accuracy, y_pred, y_true, tcp
 
+
+    def train_tcp(self):
+
+        # Confidence regression loss
+        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
+        self.loss_tcp = nn.MSELoss(reduction="mean")
+
+        self.model.eval()
+        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config.hidden_size*6)
+        self.confidence_model = to_gpu(self.confidence_model)
+        self.confidence_optizizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.lr)
+        
+        train_loss_conf = []
+
+        print("training confidence model...")
+        for batch in enumerate(tqdm(self.train_data_loader)):
+            self.model.zero_grad()
+            self.confidence_model.zero_grad()
+
+            t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+            label_input, label_mask = self.get_label_input()
+
+            # batch_size = t.size(0)
+            t = to_gpu(t)
+            v = to_gpu(v)
+            a = to_gpu(a)
+            y = to_gpu(y)
+            emo_label = to_gpu(emo_label)
+            # l = to_gpu(l)
+            l = to_cpu(l)
+            bert_sent = to_gpu(bert_sent)
+            bert_sent_type = to_gpu(bert_sent_type)
+            bert_sent_mask = to_gpu(bert_sent_mask)
+            label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
+
+            predicted_scores, predicted_labels, hidden_state = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
+                        label_input, label_mask, groundTruth_labels=emo_label, training=True)
+            
+            predicted_confidence = self.confidence_model(hidden_state)
+            emo_label = emo_label.type(torch.float)
+
+            conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_confidence)
+            train_loss_conf.append(conf_loss.item())
+
+            conf_loss.backward()
+            self.confidence_model_optimizer.step()
+        
+        train_avg_loss_conf = np.mean(train_loss_conf)
+        print(f"Confidence model Training loss: {train_avg_loss_conf}")
+
+        return train_avg_loss_conf
+
+
+    def get_label_input(self):
+        labels_embedding = np.arange(6)
+        labels_mask = [1] * labels_embedding.shape[0]
+        labels_mask = np.array(labels_mask)
+        labels_embedding = torch.from_numpy(labels_embedding)
+        labels_mask = torch.from_numpy(labels_mask)
+
+        return labels_embedding, labels_mask
     
+
     def get_cls_loss(self, predicted_scores, emo_label):
         if self.train_config.data == "ur_funny":
             emo_label = emo_label.squeeze()
         
         emo_label = emo_label.type(torch.float)
 
-        predicted_scores, emo_label = torch.permute(predicted_scores, (1, 0)), torch.permute(emo_label, (1, 0))
+        predicted_scores, emo_label = torch.permute(predicted_scores, (1, 0)), torch.permute(emo_label, (1, 0)) # (num_classes, batch_size)
 
         cls_loss = 0.0
+
+        # summation of loss for each label
         for i in range(emo_label.size(0)):
             cls_loss += self.criterion(predicted_scores[i], emo_label[i])
 
@@ -448,15 +534,17 @@ class Solver(object):
         loss = loss/3.0
         return loss
 
-    def get_conf_loss(self, pred, truth):
+    def get_conf_loss(self, pred, truth, predicted_tcp):
         tcp_loss = 0.0
         mcp_loss = 0.0
 
-        pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0))
-        tcp = torch.permute(self.model.tcp, (1, 0))
+        pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
+        true_tcp = 0.0
 
         for i in range(truth.size(0)):
-            tcp_loss += torch.div(self.loss_tcp(tcp[i], (truth[i] * pred[i])), torch.count_nonzero(truth[i]))
             mcp_loss += torch.div(self.loss_mcp(pred[i], truth[i]), torch.count_nonzero(truth[i]))
+            true_tcp += truth[i] * pred[i]
 
-        return tcp_loss + mcp_loss
+        true_tcp = torch.div(true_tcp, torch.count_nonzero(truth))
+
+        return self.loss_tcp(predicted_tcp, true_tcp) + mcp_loss

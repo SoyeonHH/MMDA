@@ -12,21 +12,14 @@ def save_load_name(args, name=''):
     return name + '_' + args.model
 
 
-def save_model(args, model, dataset=''):
+def save_model(args, model, name=''):
     if not os.path.exists('pre_trained_models'):
         os.mkdir('pre_trained_models')
-    if args.use_confidNet:
-        torch.save(model.state_dict(), f'pre_trained_models/best_model_MISA_C_{dataset}.pt')
-    else:
-        torch.save(model.state_dict(), f'pre_trained_models/best_model_MISA_{dataset}.pt')
+        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}.pt')
 
 
-def load_model(args, dataset=''):
-    if args.use_confidNet:
-        file = f'pre_trained_models/best_model_MISA_C_{dataset}.pt'
-    else:
-        file = f'pre_trained_models/best_model_MISA_{dataset}.pt'
-
+def load_model(args, name=''):
+    file = f'pre_trained_models/best_model_{args.data}_{name}.pt'
     with open(file, 'rb') as f:
         buffer = io.BytesIO(f.read())
     model = torch.load(buffer)
@@ -72,4 +65,7 @@ def load_hidden(args, dataset=''):
     return H
 
 # TODO: Implement tcp saving
-# def save_tcp()
+def save_tcp(args, tcp, name=''):
+    if not os.path.exists('pre_trained_models'):
+        os.mkdir('pre_trained_models')
+        torch.save(tcp.state_dict(), f'pre_trained_models/best_tcp_{args.data}_{name}.pt')

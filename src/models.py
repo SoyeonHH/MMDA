@@ -10,7 +10,33 @@ from transformers import BertModel, BertConfig
 
 from utils import to_gpu, to_cpu
 from utils import ReverseLayerF, getBinaryTensor
+from modules.module_decoder import DecoderModel, DecoderConfig
 
+class EmotionClassifier(nn.Module):
+    def __init__(self, input_dims, num_classes, dropout=0.1):
+        super(EmotionClassifier, self).__init__()
+        self.dense = nn.Linear(input_dims, num_classes)
+        self.activation = nn.Sigmoid()
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, seq_input):
+        out = self.dense(seq_input)
+        out = self.dropout(out)
+        out = self.activation(out)
+        return out
+
+class ConfidenceRegressionNetwork(nn.Module):
+    def __init__(self, input_dims, num_classes=1, dropout=0.1):
+        super(ConfidenceRegressionNetwork, self).__init__()
+        self.dense = nn.Linear(input_dims, num_classes)
+        self.activation = nn.Sigmoid()
+        self.dropout = nn.Dropout(dropout)
+    
+    def forward(self, seq_input):
+        out = self.dense(seq_input)
+        out = self.dropout(out)
+        out = self.activation(out)
+        return out
 
 class MISA(nn.Module):
     """MISA model for CMU-MOSEI emotion multi-label classification"""
@@ -21,7 +47,6 @@ class MISA(nn.Module):
         self.text_size = config.embedding_size
         self.visual_size = config.visual_size
         self.acoustic_size = config.acoustic_size
-
 
         self.input_sizes = input_sizes = [self.text_size, self.visual_size, self.acoustic_size]
         self.hidden_sizes = hidden_sizes = [int(self.text_size), int(self.visual_size), int(self.acoustic_size)]
@@ -53,6 +78,10 @@ class MISA(nn.Module):
             
             self.arnn1 = rnn(input_sizes[2], hidden_sizes[2], bidirectional=True)
             self.arnn2 = rnn(2*hidden_sizes[2], hidden_sizes[2], bidirectional=True)
+        
+        # Label Decoder
+        decoder_config, _ = DecoderConfig.get_config('decoder-base', cache_dir=None, type_vocab_size=2, state_dict=None, task_config=config)
+        self.decoder = DecoderModel(decoder_config)
 
 
         ##########################################
@@ -78,6 +107,20 @@ class MISA(nn.Module):
         self.project_a.add_module('project_a', nn.Linear(in_features=hidden_sizes[2]*4, out_features=config.hidden_size))
         self.project_a.add_module('project_a_activation', self.activation)
         self.project_a.add_module('project_a_layer_norm', nn.LayerNorm(config.hidden_size))
+
+
+        ##########################################
+        # unimodal classifiers
+        ##########################################
+        if self.config.freeze == 'False':
+            self.classifier_t = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
+            self.classifier_v = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
+            self.classifier_a = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
+
+
+        self.confid_t = ConfidenceRegressionNetwork(config.hidden_size)
+        self.confid_v = ConfidenceRegressionNetwork(config.hidden_size)
+        self.confid_a = ConfidenceRegressionNetwork(config.hidden_size)
 
 
         ##########################################
@@ -132,26 +175,8 @@ class MISA(nn.Module):
         self.sp_discriminator = nn.Sequential()
         self.sp_discriminator.add_module('sp_discriminator_layer_1', nn.Linear(in_features=config.hidden_size, out_features=4))
 
-        ##########################################
-        # confidence regression network
-        ##########################################
-        self.confidence = nn.Sequential()
-        self.confidence.add_module('confidence_layer_1', nn.Linear(in_features=config.hidden_size*6, out_features=6))
-        self.confidence.add_module('confidence_layer_activation', nn.Sigmoid())
-
-        ##########################################
-        # label decoder
-        ##########################################
-        ## TODO: Implement label decoder module
-        ## label embedding shape: (batch_size, hidden_size*6, num_labels)
-        ## modality input shape: (batch_size, hidden_size*6, 1)
-
-
-        self.classifier = nn.Sequential()
-        self.classifier.add_module('classifier_layer', nn.Linear(in_features=self.config.hidden_size*6, out_features=output_size))
-        self.classifier.add_module('classifier_layer_dropout', nn.Dropout(dropout_rate))
-        self.classifier.add_module('classifier_layer_activation', nn.Sigmoid())
-
+        self.confidence = ConfidenceRegressionNetwork(config.hidden_size*6)
+        self.classifier = EmotionClassifier(config.hidden_size*6, num_classes=output_size,dropout=dropout_rate)
         self.tlayer_norm = nn.LayerNorm((hidden_sizes[0]*2,))
         self.vlayer_norm = nn.LayerNorm((hidden_sizes[1]*2,))
         self.alayer_norm = nn.LayerNorm((hidden_sizes[2]*2,))
@@ -179,9 +204,21 @@ class MISA(nn.Module):
 
         return final_h1, final_h2
 
-    def alignment(self, sentences, visual, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask):
+    def forward(self, sentences, visual, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask,
+                  label_input, label_mask, groundTruth_labels=None, training=True):
+        """
+        visual: (L, B, Dv)
+        aucoustic: (L, B, Da)
+        bert_sent: (B, L)
+
+        utterence_text: (B, Dt)
+        utterence_video: (B, 2 * Dv)
+        utterence_audio: (B, 2 * Da)
+        """
         
         batch_size = lengths.size(0)
+        label_input = label_input.unsqueeze(0).repeat(batch_size, 1)
+        label_mask = label_mask.unsqueeze(0).repeat(batch_size, 1)
         
         if self.config.use_bert:
             bert_output = self.bertmodel(input_ids=bert_sent, 
@@ -243,11 +280,13 @@ class MISA(nn.Module):
         h = torch.stack((self.utt_private_t, self.utt_private_v, self.utt_private_a, self.utt_shared_t, self.utt_shared_v,  self.utt_shared_a), dim=0)
         h = self.transformer_encoder(h)
         h = torch.cat((h[0], h[1], h[2], h[3], h[4], h[5]), dim=1)
+        h_mask = torch.ones_like(h)
 
-        self.tcp = self.confidence(h)   # shape (batch_size, 6)
-        predicted_scores = self.classifier(h)          # shape (batch_size, num_classes)
+        decoder_output = self.decoder(label_input, h, label_mask, h_mask)
+        predicted_scores = self.classifier(decoder_output)
+        predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
-        return predicted_scores, predicted_labels
+        return predicted_scores, predicted_labels, decoder_output
 
 
     
@@ -278,8 +317,9 @@ class MISA(nn.Module):
         self.utt_shared_v = self.shared(utterance_v)
         self.utt_shared_a = self.shared(utterance_a)
 
+    def modality_classifier(self, utterance_t, utterance_v, utterance_a):
+        # Modality classifier
+        self.modality_t = self.modality_classifier_t(utterance_t)
+        self.modality_v = self.modality_classifier_v(utterance_v)
+        self.modality_a = self.modality_classifier_a(utterance_a)
 
-    def forward(self, sentences, video, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask):
-        batch_size = lengths.size(0)
-        o = self.alignment(sentences, video, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask)
-        return o

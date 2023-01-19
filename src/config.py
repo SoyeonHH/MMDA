@@ -11,15 +11,15 @@ import torch.nn as nn
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # path to a pretrained word embedding file
-# word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
-word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
+word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
+# word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
-# sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
-# data_dir = Path('/home/iknow/workspace/multimodal')
-sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
-data_dir = Path('/data1/multimodal')
+sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
+data_dir = Path('/home/iknow/workspace/multimodal')
+# sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
+# data_dir = Path('/data1/multimodal')
 data_dict = {'mosi': data_dir.joinpath('MOSI'), 'mosei': data_dir.joinpath('MOSEI')}
 optimizer_dict = {'RMSprop': optim.RMSprop, 'Adam': optim.Adam}
 activation_dict = {'elu': nn.ELU, "hardshrink": nn.Hardshrink, "hardtanh": nn.Hardtanh,
@@ -109,8 +109,9 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--use_confidNet', type=str2bool, default=False)
-    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument('--eval_mode', type=str, default='macro', help='one of {micro, macro, weighted}')
+    parser.add_argument('--freeze', type=str2bool, default=False)
 
     # Bert
     parser.add_argument('--use_bert', type=str2bool, default=True)
@@ -141,6 +142,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
     parser.add_argument('--weight_decay', type=float, default=0.1)
+    parser.add_argument("--local_rank", default=0, type=int, help="distribted training") 
 
     # TODO: Modify the model.py to adapt dynamic feature extractor (rnncell -> extractor)
     parser.add_argument('--extractor', type=str, default='lstm', help='one of {lstm, trasformer}')
