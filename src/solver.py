@@ -211,7 +211,7 @@ class Solver(object):
             # model evaluation with dev set
             ##########################################
 
-            valid_loss, valid_loss,conf, valid_acc, preds, truths, tcp = self.eval(mode="dev")
+            valid_loss, valid_loss_conf, valid_acc, preds, truths, tcp = self.eval(mode="dev")
 
             print("-" * 100)
             print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
@@ -534,17 +534,25 @@ class Solver(object):
         loss = loss/3.0
         return loss
 
-    def get_conf_loss(self, pred, truth, predicted_tcp):
+    # TODO: Check if this is correct
+    def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
         tcp_loss = 0.0
         mcp_loss = 0.0
+
+        for i in range(truth.size(0)):  # for each batch
+            tcp = 0.0
+            for j in range(truth[i].size(0)):   # for each class
+                tcp += pred[i][j] * truth[i][j]
+            tcp = torch.div(tcp, torch.count_nonzero(truth[i]))
+            tcp_loss += self.loss_tcp(predicted_tcp[i], tcp)
+        
+        tcp_loss = torch.div(tcp_loss, truth.size(0))
 
         pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
         true_tcp = 0.0
 
         for i in range(truth.size(0)):
-            mcp_loss += torch.div(self.loss_mcp(pred[i], truth[i]), torch.count_nonzero(truth[i]))
-            true_tcp += truth[i] * pred[i]
+            mcp_loss += self.loss_mcp(pred[i], truth[i])
+        mcp_loss = mcp_loss / truth.size(0)
 
-        true_tcp = torch.div(true_tcp, torch.count_nonzero(truth))
-
-        return self.loss_tcp(predicted_tcp, true_tcp) + mcp_loss
+        return tcp_loss + mcp_loss

@@ -64,7 +64,6 @@ def load_hidden(args, dataset=''):
     H = torch.load(buffer)
     return H
 
-# TODO: Implement tcp saving
 def save_tcp(args, tcp, name=''):
     if not os.path.exists('pre_trained_models'):
         os.mkdir('pre_trained_models')
