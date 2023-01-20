@@ -218,7 +218,7 @@ class MultiHeadAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, q, k, v, attention_mask):
+    def forward(self, q, k, v, attention_mask): # q, k, v: [batch_size, num_classes, hidden_size]
         mixed_query_layer = self.query(q)
         mixed_key_layer = self.key(k)
         mixed_value_layer = self.value(v)

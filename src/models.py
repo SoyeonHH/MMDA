@@ -80,8 +80,8 @@ class MISA(nn.Module):
             self.arnn2 = rnn(2*hidden_sizes[2], hidden_sizes[2], bidirectional=True)
         
         # Label Decoder
-        decoder_config, _ = DecoderConfig.get_config('decoder-base', cache_dir=None, type_vocab_size=2, state_dict=None, task_config=config)
-        self.decoder = DecoderModel(decoder_config)
+        # decoder_config, _ = DecoderConfig.get_config('decoder-base', cache_dir=None, type_vocab_size=2, state_dict=None, task_config=config)
+        # self.decoder = DecoderModel(decoder_config)
 
 
         ##########################################
@@ -282,11 +282,11 @@ class MISA(nn.Module):
         h = torch.cat((h[0], h[1], h[2], h[3], h[4], h[5]), dim=1)
         h_mask = torch.ones_like(h)
 
-        decoder_output = self.decoder(label_input, h, label_mask, h_mask)
-        predicted_scores = self.classifier(decoder_output)
+        # decoder_output = self.decoder(label_input, h, label_mask, h_mask)
+        predicted_scores = self.classifier(h)
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
-        return predicted_scores, predicted_labels, decoder_output
+        return predicted_scores, predicted_labels, h
 
 
     
@@ -323,3 +323,14 @@ class MISA(nn.Module):
         self.modality_v = self.modality_classifier_v(utterance_v)
         self.modality_a = self.modality_classifier_a(utterance_a)
 
+
+class ModalityClassifier(nn.Module):
+    """Pretrianing Modality classifier for emotion recognition."""
+    def __init__(self, config):
+        super(ModalityClassifier, self).__init__()
+
+        self.config = config
+        if config.model == 'Text Classification':
+            self.input_size = input_size = config.embedding_size
+
+        self.hidden_size = hidden_size = int(input_size)

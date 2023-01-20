@@ -61,6 +61,11 @@ class Solver(object):
         if self.model is None:
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
+        # bulid confidence model
+        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config.hidden_size*6)
+        self.confidence_model = to_gpu(self.confidence_model)
+        self.confidence_optimizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.learning_rate)
+
         # Final list
         for name, param in self.model.named_parameters():
 
@@ -111,6 +116,10 @@ class Solver(object):
         # self.loss_recon = MSE()
         self.loss_recon = nn.MSELoss(reduction="mean")
         self.loss_cmd = CMD()
+
+        # Confidence regression loss
+        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
+        self.loss_tcp = nn.MSELoss(reduction="mean")
         
         best_valid_loss = float('inf')
         best_train_loss = float('inf')
@@ -196,7 +205,7 @@ class Solver(object):
             print(f"Training loss: {train_avg_loss}")
 
             # train tcp
-            self.train_tcp()
+            self.train_tcp(self.model)
 
             ##########################################
             # model evaluation with dev set
@@ -221,7 +230,7 @@ class Solver(object):
                 torch.save(self.optimizer.state_dict(), f'checkpoints/optim_{self.train_config.name}.std')
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
-                save_model(self.train_config, self.model)
+                save_model(self.train_config, self.model, name=self.train_config.model)
                 save_tcp(self.train_config, tcp, name="fusion_representation")
                 # Print best model results
                 eval_values = get_metrics(best_truths, best_results)
@@ -392,22 +401,12 @@ class Solver(object):
         return eval_loss, eval_conf_loss, accuracy, y_pred, y_true, tcp
 
 
-    def train_tcp(self):
-
-        # Confidence regression loss
-        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
-        self.loss_tcp = nn.MSELoss(reduction="mean")
-
-        self.model.eval()
-        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config.hidden_size*6)
-        self.confidence_model = to_gpu(self.confidence_model)
-        self.confidence_optizizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.lr)
-        
+    def train_tcp(self, model):
+        self.confidence_model.train()
         train_loss_conf = []
 
         print("training confidence model...")
-        for batch in enumerate(tqdm(self.train_data_loader)):
-            self.model.zero_grad()
+        for idx, batch in enumerate(tqdm(self.train_data_loader)):
             self.confidence_model.zero_grad()
 
             t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
@@ -426,17 +425,18 @@ class Solver(object):
             bert_sent_mask = to_gpu(bert_sent_mask)
             label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-            predicted_scores, predicted_labels, hidden_state = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
+            predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
                         label_input, label_mask, groundTruth_labels=emo_label, training=True)
             
             predicted_confidence = self.confidence_model(hidden_state)
             emo_label = emo_label.type(torch.float)
 
             conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_confidence)
-            train_loss_conf.append(conf_loss.item())
 
             conf_loss.backward()
-            self.confidence_model_optimizer.step()
+            self.confidence_optimizer.step()
+
+            train_loss_conf.append(conf_loss.item())
         
         train_avg_loss_conf = np.mean(train_loss_conf)
         print(f"Confidence model Training loss: {train_avg_loss_conf}")
