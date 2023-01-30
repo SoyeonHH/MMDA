@@ -109,7 +109,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--use_confidNet', type=str2bool, default=False)
-    parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--eval_mode', type=str, default='macro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
 
@@ -138,7 +138,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--recon_weight', type=float, default=0.7)  # gamma
     parser.add_argument('--conf_weight', type=float, default=0.3)
 
-    parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--learning_rate', type=float, default=1e-5)
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
     parser.add_argument('--weight_decay', type=float, default=0.1)
@@ -149,7 +149,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--rnncell', type=str, default='lstm')
     parser.add_argument('--embedding_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=128)
-    parser.add_argument('--dropout', type=float, default=0.1)
+    parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--reverse_grad_weight', type=float, default=1.0)
     # Selectin activation from 'elu', "hardshrink", "hardtanh", "leakyrelu", "prelu", "relu", "rrelu", "tanh"
     parser.add_argument('--activation', type=str, default='leakyrelu')
@@ -157,7 +157,9 @@ def get_config(parse=True, **optional_kwargs):
 
     # Model
     parser.add_argument('--model', type=str,
-                        default='MISA', help='one of {MISA, }')
+                        default='MISA', help='one of {MISA, TextBert, AudioLSTM, VideoLSTM}')
+    parser.add_argument('--conf_lr', type=float, default=1e-3)
+    parser.add_argument('--conf_dropout', type=float, default=0.1)
 
     # Parse arguments
     if parse:

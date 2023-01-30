@@ -64,7 +64,7 @@ class Solver(object):
         # bulid confidence model
         self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config.hidden_size*6)
         self.confidence_model = to_gpu(self.confidence_model)
-        self.confidence_optimizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.learning_rate)
+        self.confidence_optimizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.conf_lr)
 
         # Final list
         for name, param in self.model.named_parameters():
@@ -205,7 +205,7 @@ class Solver(object):
             print(f"Training loss: {train_avg_loss}")
 
             # train tcp
-            self.train_tcp(self.model)
+            train_avg_loss_conf = self.train_tcp(self.model)
 
             ##########################################
             # model evaluation with dev set
@@ -253,45 +253,51 @@ class Solver(object):
             #         lr_scheduler.step()
             #         print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
-            # if self.train_config.eval_mode == "macro":
-            #     wandb.log(
-            #         (
-            #             {
-            #                 "train_loss": train_avg_loss,
-            #                 "valid_loss": valid_loss,
-            #                 "test_f_score": eval_values['f1'],
-            #                 "test_precision": eval_values['precision'],
-            #                 "test_recall": eval_values['recall'],
-            #                 "test_acc2": eval_values['acc']
-            #             }
-            #         )
-            #     )
-            # elif self.train_config.eval_mode == "micro":
-            #     wandb.log(
-            #         (
-            #             {
-            #                 "train_loss": train_avg_loss,
-            #                 "valid_loss": valid_loss,
-            #                 "test_f_score": eval_values['micro_f1'],
-            #                 "test_precision": eval_values['micro_precision'],
-            #                 "test_recall": eval_values['micro_recall'],
-            #                 "test_acc2": eval_values['acc']
-            #             }
-            #         )
-            #     )
-            # elif self.train_config.eval_mode == "weighted":
-            #     wandb.log(
-            #         (
-            #             {
-            #                 "train_loss": train_avg_loss,
-            #                 "valid_loss": valid_loss,
-            #                 "test_f_score": eval_values['weighted_f1'],
-            #                 "test_precision": eval_values['weighted_precision'],
-            #                 "test_recall": eval_values['weighted_recall'],
-            #                 "test_acc2": eval_values['acc']
-            #             }
-            #         )
-            #     )
+            if self.train_config.eval_mode == "macro":
+                wandb.log(
+                    (
+                        {
+                            "train_loss": train_avg_loss,
+                            "valid_loss": valid_loss,
+                            "test_f_score": eval_values['f1'],
+                            "test_precision": eval_values['precision'],
+                            "test_recall": eval_values['recall'],
+                            "test_acc2": eval_values['acc'],
+                            "train_loss_conf": train_avg_loss_conf,
+                            "valid_loss_conf": valid_loss_conf
+                        }
+                    )
+                )
+            elif self.train_config.eval_mode == "micro":
+                wandb.log(
+                    (
+                        {
+                            "train_loss": train_avg_loss,
+                            "valid_loss": valid_loss,
+                            "test_f_score": eval_values['micro_f1'],
+                            "test_precision": eval_values['micro_precision'],
+                            "test_recall": eval_values['micro_recall'],
+                            "test_acc2": eval_values['acc'],
+                            "train_loss_conf": train_avg_loss_conf,
+                            "valid_loss_conf": valid_loss_conf
+                        }
+                    )
+                )
+            elif self.train_config.eval_mode == "weighted":
+                wandb.log(
+                    (
+                        {
+                            "train_loss": train_avg_loss,
+                            "valid_loss": valid_loss,
+                            "test_f_score": eval_values['weighted_f1'],
+                            "test_precision": eval_values['weighted_precision'],
+                            "test_recall": eval_values['weighted_recall'],
+                            "test_acc2": eval_values['acc'],
+                            "train_loss_conf": train_avg_loss_conf,
+                            "valid_loss_conf": valid_loss_conf
+                        }
+                    )
+                )
 
             # hyperparameter tuning report
             hpt.report_hyperparameter_tuning_metric(
@@ -534,25 +540,25 @@ class Solver(object):
         loss = loss/3.0
         return loss
 
-    # TODO: Check if this is correct
     def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
         tcp_loss = 0.0
         mcp_loss = 0.0
+        tcp_batch = []
 
         for i in range(truth.size(0)):  # for each batch
             tcp = 0.0
             for j in range(truth[i].size(0)):   # for each class
                 tcp += pred[i][j] * truth[i][j]
-            tcp = torch.div(tcp, torch.count_nonzero(truth[i]))
-            tcp_loss += self.loss_tcp(predicted_tcp[i], tcp)
+            tcp = tcp / torch.count_nonzero(truth[i]) if torch.count_nonzero(truth[i]) != 0 else 0.0
+            tcp_batch.append(tcp)
         
-        tcp_loss = torch.div(tcp_loss, truth.size(0))
+        tcp_batch = to_gpu(torch.tensor(tcp_batch))
+        tcp_loss = self.loss_tcp(predicted_tcp, tcp_batch)
 
-        pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
-        true_tcp = 0.0
+        # pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
 
-        for i in range(truth.size(0)):
-            mcp_loss += self.loss_mcp(pred[i], truth[i])
-        mcp_loss = mcp_loss / truth.size(0)
+        # for i in range(truth.size(0)):
+        #     mcp_loss += self.loss_mcp(pred[i], truth[i])
+        # mcp_loss = mcp_loss / truth.size(0)
 
-        return tcp_loss + mcp_loss
+        return tcp_loss

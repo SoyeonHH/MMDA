@@ -330,7 +330,7 @@ class ModalityClassifier(nn.Module):
         super(ModalityClassifier, self).__init__()
 
         self.config = config
-        if config.model == 'Text Classification':
+        if config.model == 'TextBert':
             self.input_size = input_size = config.embedding_size
 
         self.hidden_size = hidden_size = int(input_size)

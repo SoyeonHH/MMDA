@@ -15,7 +15,7 @@ def save_load_name(args, name=''):
 def save_model(args, model, name=''):
     if not os.path.exists('pre_trained_models'):
         os.mkdir('pre_trained_models')
-        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}.pt')
+    torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}.pt')
 
 
 def load_model(args, name=''):
@@ -67,4 +67,4 @@ def load_hidden(args, dataset=''):
 def save_tcp(args, tcp, name=''):
     if not os.path.exists('pre_trained_models'):
         os.mkdir('pre_trained_models')
-        torch.save(tcp.state_dict(), f'pre_trained_models/best_tcp_{args.data}_{name}.pt')
+    torch.save(tcp, f'pre_trained_models/best_tcp_{args.data}_{name}.pt')
