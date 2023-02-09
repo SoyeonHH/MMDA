@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from numpy import exp
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -28,14 +29,15 @@ class EmotionClassifier(nn.Module):
 class ConfidenceRegressionNetwork(nn.Module):
     def __init__(self, input_dims, num_classes=1, dropout=0.1):
         super(ConfidenceRegressionNetwork, self).__init__()
-        self.dense = nn.Linear(input_dims, num_classes)
-        self.activation = nn.Sigmoid()
-        self.dropout = nn.Dropout(dropout)
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dims, 128),
+            nn.ReLU(),
+            nn.BatchNorm1d(128),
+            nn.Dropout(dropout),
+            nn.Linear(128, num_classes))
     
     def forward(self, seq_input):
-        out = self.dense(seq_input)
-        out = self.dropout(out)
-        out = self.activation(out)
+        out = self.mlp(seq_input)
         return out
 
 class MISA(nn.Module):
@@ -249,6 +251,9 @@ class MISA(nn.Module):
         final_h1a, final_h2a = self.extract_features(acoustic, lengths, self.arnn1, self.arnn2, self.alayer_norm)
         utterance_audio = torch.cat((final_h1a, final_h2a), dim=2).permute(1, 0, 2).contiguous().view(batch_size, -1)
 
+        # confidence scores from modality features
+        
+
         # Shared-private encoders
         self.shared_private(utterance_text, utterance_video, utterance_audio)
 
@@ -317,20 +322,45 @@ class MISA(nn.Module):
         self.utt_shared_v = self.shared(utterance_v)
         self.utt_shared_a = self.shared(utterance_a)
 
-    def modality_classifier(self, utterance_t, utterance_v, utterance_a):
-        # Modality classifier
-        self.modality_t = self.modality_classifier_t(utterance_t)
-        self.modality_v = self.modality_classifier_v(utterance_v)
-        self.modality_a = self.modality_classifier_a(utterance_a)
-
 
 class ModalityClassifier(nn.Module):
     """Pretrianing Modality classifier for emotion recognition."""
     def __init__(self, config):
         super(ModalityClassifier, self).__init__()
 
+        # Model configuration
         self.config = config
         if config.model == 'TextBert':
             self.input_size = input_size = config.embedding_size
+        elif config.model == 'VisualLSTM':
+            self.input_size = input_size = config.visual_size
+        elif config.model == 'AudioLSTM':
+            self.input_size = input_size = config.audio_size
 
         self.hidden_size = hidden_size = int(input_size)
+        self.output_size = output_size = config.num_classes
+        self.dropout_rate = dropout_rate = config.dropout
+        self.activation = self.config.activation()
+        self.tanh = nn.Tanh()
+
+        # Feature extractor
+        rnn = nn.LSTM if self.config.rnncell == 'lstm' else nn.GRU
+
+        if config.model == 'TextBert' and self.config.use_bert:
+            # Initializing a BERT bert-base-uncased style configuration
+            bertconfig = BertConfig.from_pretrained('bert-base-uncased', output_hidden_states=True)
+            self.bertmodel = BertModel.from_pretrained('bert-base-uncased', config=bertconfig)
+            self.hidden_size = hidden_size = 768
+        else:
+            self.embed = nn.Embedding(len(config.word2id), input_size)
+            self.rnn1 = rnn(input_size, hidden_size, dropout=dropout_rate, bidirectional=True)
+            self.rnn2 = rnn(hidden_size*2, hidden_size, dropout=dropout_rate, bidirectional=True)
+        
+        # Mapping modalities to same space
+        self.project = nn.Sequential()
+        self.project.add_module('project', nn.Linear(in_features=hidden_size, out_features=config.hidden_size))
+        self.project.add_module('project_activation', self.activation)
+        self.project.add_module('project_layer_norm', nn.LayerNorm(config.hidden_size))
+
+        # Classifier
+        self.classifier = EmotionClassifier(config.hidden_size, num_classes=output_size, dropout=0.1)
