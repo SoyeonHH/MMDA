@@ -109,8 +109,8 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--use_confidNet', type=str2bool, default=False)
-    parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--eval_mode', type=str, default='macro', help='one of {micro, macro, weighted}')
+    parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
 
     # Bert
@@ -158,8 +158,8 @@ def get_config(parse=True, **optional_kwargs):
     # Model
     parser.add_argument('--model', type=str,
                         default='MISA', help='one of {MISA, TextBert, AudioLSTM, VideoLSTM}')
-    parser.add_argument('--conf_lr', type=float, default=1e-3)
-    parser.add_argument('--conf_dropout', type=float, default=0.1)
+    parser.add_argument('--conf_lr', type=float, default=1e-5)
+    parser.add_argument('--conf_dropout', type=float, default=0.5)
 
     # Parse arguments
     if parse:

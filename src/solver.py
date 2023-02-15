@@ -62,7 +62,8 @@ class Solver(object):
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
         # bulid confidence model
-        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config.hidden_size*6)
+        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config.hidden_size*6, \
+            num_classes=1, dropout=self.train_config.conf_dropout)
         self.confidence_model = to_gpu(self.confidence_model)
         self.confidence_optimizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.conf_lr)
 
