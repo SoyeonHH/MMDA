@@ -159,7 +159,7 @@ class Solver(object):
                 label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
                 predicted_scores, predicted_labels, _ = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
-                          label_input, label_mask, groundTruth_labels=emo_label, training=True)
+                          label_input, label_mask, groundTruth_labels=emo_label, training=True, masked_modality=None)
                 # y_tilde = y_tilde.squeeze()
 
                 
@@ -372,7 +372,7 @@ class Solver(object):
 
                 predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, \
-                        label_input, label_mask, groundTruth_labels=emo_label, training=False)                
+                        label_input, label_mask, groundTruth_labels=emo_label, training=False, masked_modality=None)       
                 # y_tilde = y_tilde.squeeze()
 
                 if self.train_config.data == "ur_funny":
@@ -434,7 +434,7 @@ class Solver(object):
             label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
             predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
-                        label_input, label_mask, groundTruth_labels=emo_label, training=True)
+                        label_input, label_mask, groundTruth_labels=emo_label, training=True, masked_modality=None)
             
             predicted_confidence = self.confidence_model(hidden_state)
             emo_label = emo_label.type(torch.float)

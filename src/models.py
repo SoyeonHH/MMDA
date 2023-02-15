@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.autograd import Function
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from transformers import BertModel, BertConfig
+from maskedtensor import as_masked_tensor, masked_tensor
 
 from utils import to_gpu, to_cpu
 from utils import ReverseLayerF, getBinaryTensor
@@ -207,7 +208,7 @@ class MISA(nn.Module):
         return final_h1, final_h2
 
     def forward(self, sentences, visual, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask,
-                  label_input, label_mask, groundTruth_labels=None, training=True):
+                  label_input, label_mask, groundTruth_labels=None, training=True, masked_modality=None):
         """
         visual: (L, B, Dv)
         aucoustic: (L, B, Da)
@@ -251,7 +252,16 @@ class MISA(nn.Module):
         final_h1a, final_h2a = self.extract_features(acoustic, lengths, self.arnn1, self.arnn2, self.alayer_norm)
         utterance_audio = torch.cat((final_h1a, final_h2a), dim=2).permute(1, 0, 2).contiguous().view(batch_size, -1)
 
-        # confidence scores from modality features
+        # TODO: modality-masking
+        if masked_modality == "text":
+            mask = torch.zeros_like(utterance_text)
+            utterance_text = masked_tensor(utterance_text, mask)
+        elif masked_modality == "video":
+            mask = torch.zeros_like(utterance_video)
+            utterance_video = masked_tensor(utterance_video, mask)
+        elif masked_modality == "audio":
+            mask = torch.zeros_like(utterance_audio)
+            utterance_audio = masked_tensor(utterance_audio, mask)
         
 
         # Shared-private encoders
