@@ -9,6 +9,7 @@ import wandb
 from config import get_config, activation_dict
 from data_loader import get_loader
 from solver import Solver
+from inference import Inference
 from utils.tools import *
 from transformers import BertTokenizer
 
@@ -70,6 +71,10 @@ def main():
 
     # Train the model (test scores will be returned based on dev performance)
     solver.train()
+
+    # Test the model
+    tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
+    tester.inference()
 
 
 if __name__ == "__main__":

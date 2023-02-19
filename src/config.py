@@ -109,7 +109,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--use_confidNet', type=str2bool, default=False)
-    parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
 
@@ -149,7 +149,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--rnncell', type=str, default='lstm')
     parser.add_argument('--embedding_size', type=int, default=300)
     parser.add_argument('--hidden_size', type=int, default=128)
-    parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--dropout', type=float, default=0.6)
     parser.add_argument('--reverse_grad_weight', type=float, default=1.0)
     # Selectin activation from 'elu', "hardshrink", "hardtanh", "leakyrelu", "prelu", "relu", "rrelu", "tanh"
     parser.add_argument('--activation', type=str, default='leakyrelu')

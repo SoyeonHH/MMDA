@@ -142,8 +142,8 @@ class Solver(object):
 
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
-                t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = self.get_label_input()
+                _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                label_input, label_mask = Solver.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -318,7 +318,7 @@ class Solver(object):
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results)
         best_acc, best_f1, best_precision, best_recall = \
-             eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']
+             eval_values_best['acc'], eval_values_best['micro_f1'], eval_values_best['micro_precision'], eval_values_best['micro_recall']
         print(f'Accuracy: {best_acc}')
         print(f'F1 score: {best_f1}')
         print(f'Precision: {best_precision}')
@@ -354,8 +354,8 @@ class Solver(object):
                 self.model.zero_grad()
                 self.confidence_model.zero_grad()
 
-                t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = self.get_label_input()
+                _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                label_input, label_mask = Solver.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -417,7 +417,7 @@ class Solver(object):
         for idx, batch in enumerate(tqdm(self.train_data_loader)):
             self.confidence_model.zero_grad()
 
-            t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+            _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
             label_input, label_mask = self.get_label_input()
 
             # batch_size = t.size(0)
@@ -451,8 +451,8 @@ class Solver(object):
 
         return train_avg_loss_conf
 
-
-    def get_label_input(self):
+    @staticmethod
+    def get_label_input():
         labels_embedding = np.arange(6)
         labels_mask = [1] * labels_embedding.shape[0]
         labels_mask = np.array(labels_mask)
@@ -541,6 +541,7 @@ class Solver(object):
         loss += self.loss_recon(self.model.utt_a_recon, self.model.utt_a_orig)
         loss = loss/3.0
         return loss
+
 
     def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
         tcp_loss = 0.0

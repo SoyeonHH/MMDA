@@ -255,6 +255,7 @@ class MISA(nn.Module):
         # TODO: modality-masking
         if masked_modality == "text":
             mask = torch.zeros_like(utterance_text)
+            # TODO: Fix the bug: exception: no description
             utterance_text = masked_tensor(utterance_text, mask)
         elif masked_modality == "video":
             mask = torch.zeros_like(utterance_video)
