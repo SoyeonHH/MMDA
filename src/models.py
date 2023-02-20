@@ -251,19 +251,18 @@ class MISA(nn.Module):
         # extract features from acoustic modality
         final_h1a, final_h2a = self.extract_features(acoustic, lengths, self.arnn1, self.arnn2, self.alayer_norm)
         utterance_audio = torch.cat((final_h1a, final_h2a), dim=2).permute(1, 0, 2).contiguous().view(batch_size, -1)
+        
 
         # TODO: modality-masking
         if masked_modality == "text":
-            mask = torch.zeros_like(utterance_text)
-            # TODO: Fix the bug: exception: no description
-            utterance_text = masked_tensor(utterance_text, mask)
+            mask = torch.zeros_like(utterance_text) > 0
+            utterance_text = utterance_text * mask.int().float()
         elif masked_modality == "video":
-            mask = torch.zeros_like(utterance_video)
-            utterance_video = masked_tensor(utterance_video, mask)
+            mask = torch.zeros_like(utterance_video) > 0
+            utterance_video = utterance_video * mask.int().float()
         elif masked_modality == "audio":
-            mask = torch.zeros_like(utterance_audio)
-            utterance_audio = masked_tensor(utterance_audio, mask)
-        
+            mask = torch.zeros_like(utterance_audio) > 0
+            utterance_audio = utterance_audio * mask.int().float()
 
         # Shared-private encoders
         self.shared_private(utterance_text, utterance_video, utterance_audio)

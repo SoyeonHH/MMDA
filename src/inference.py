@@ -82,7 +82,7 @@ class Inference(object):
 
         with torch.no_grad():
 
-            for batch in self.dataloader:
+            for batch in tqdm(self.dataloader):
                 result = dict()
                 self.model.zero_grad()
                 self.confidence_model.zero_grad()
@@ -138,10 +138,10 @@ class Inference(object):
                 predicted_tcp, predicted_tcp_t, predicted_tcp_v, predicted_tcp_a = \
                     predicted_tcp.squeeze(), predicted_tcp_t.squeeze(), predicted_tcp_v.squeeze(), predicted_tcp_a.squeeze()
 
-                cls_loss = Solver.get_cls_loss(predicted_scores, emo_label)
+                cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 loss = cls_loss
 
-                conf_loss = Solver.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
+                conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
 
                 eval_loss.append(loss.item())
                 eval_conf_loss.append(conf_loss.item())
@@ -159,7 +159,24 @@ class Inference(object):
                 result["confidence-a"] = predicted_tcp_a.detach().cpu().numpy()
                 results.append(result)
 
-                wandb.log(result)
+                eval_values = get_metrics(emo_label.detach().cpu().numpy(), predicted_labels.detach().cpu().numpy())
+
+                # wandb.log(
+                #     (
+                #         {
+                #             "test_loss": loss.item(),
+                #             "test_conf_loss": conf_loss.item(),
+                #             "test_accuracy": eval_values['acc'],
+                #             "test_precision": eval_values['precision'],
+                #             "test_recall": eval_values['recall'],
+                #             "test_f1": eval_values['f1'],
+                #             "confidence score": predicted_tcp.detach().cpu().numpy(),
+                #             "confidence score-t": predicted_tcp_t.detach().cpu().numpy(),
+                #             "confidence score-v": predicted_tcp_v.detach().cpu().numpy(),
+                #             "confidence score-a": predicted_tcp_a.detach().cpu().numpy()  
+                #         }
+                #     )
+                # )
 
         columns = ["id", "input_sentence", "label", "prediction", "confidence", "confidence-t", "confidence-v", "confidence-a"]
         with open('results.csv', 'w') as f:
@@ -183,7 +200,7 @@ class Inference(object):
 
 
     def get_cls_loss(self, predicted_scores, emo_label):
-        if self.train_config.data == "ur_funny":
+        if self.config.data == "ur_funny":
             emo_label = emo_label.squeeze()
         
         emo_label = emo_label.type(torch.float)
