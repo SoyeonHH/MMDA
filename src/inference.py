@@ -1,4 +1,3 @@
-# TODO: Implement inference.py
 ## Source: input dataset, dataloader, model, config, checkpoint
 ## Output: prediction, confidence, modality-masking confidence scores
 ## functions:
@@ -14,6 +13,7 @@ import math
 from math import isnan
 import re
 import pickle
+import json
 
 from create_dataset import PAD
 from solver import *
@@ -59,7 +59,7 @@ class Inference(object):
             self.model.load_state_dict(load_model(config, name=config.model))
 
         if self.confidence_model is None:
-            self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.config.hidden_size*6, \
+            self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.config, self.config.hidden_size*6, \
                 num_classes=1, dropout=self.config.conf_dropout)
             self.confidence_model.load_state_dict(load_model(config, name="confidNet"))
         
@@ -75,8 +75,8 @@ class Inference(object):
         self.model.eval()
         self.confidence_model.eval()
 
-        y_true, y_pred = [], []
-        eval_loss, eval_conf_loss = [], []
+        y_true, y_pred, y_pred_dynamic = [], [], []
+        eval_loss, eval_conf_loss, dynamic_eval_loss = [], [], []
 
         results = list()
 
@@ -105,23 +105,19 @@ class Inference(object):
 
                 # Mutli-Modal Fusion Model
                 predicted_scores, predicted_labels, hidden_state = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, \
-                        label_input, label_mask, groundTruth_labels=emo_label, training=False, masked_modality=None)
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, masked_modality=None)
                 
                 # Text Masking Fusion Model
                 predicted_scores_t, predicted_labels_t, hidden_state_t = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, \
-                        label_input, label_mask, groundTruth_labels=emo_label, training=False, masked_modality="text")
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, masked_modality="text")
 
                 # Video Masking Fusion Model
                 predicted_scores_v, predicted_labels_v, hidden_state_v = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, \
-                        label_input, label_mask, groundTruth_labels=emo_label, training=False, masked_modality="video")
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, masked_modality="video")
                 
                 # Audio Masking Fusion Model
                 predicted_scores_a, predicted_labels_a, hidden_state_a = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, \
-                        label_input, label_mask, groundTruth_labels=emo_label, training=False, masked_modality="audio")
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,label_input, label_mask, masked_modality="audio")
                 
                 
                 if self.config.data == "ur_funny":
@@ -138,21 +134,30 @@ class Inference(object):
                 predicted_tcp, predicted_tcp_t, predicted_tcp_v, predicted_tcp_a = \
                     predicted_tcp.squeeze(), predicted_tcp_t.squeeze(), predicted_tcp_v.squeeze(), predicted_tcp_a.squeeze()
 
+                # TODO: Add confidence-aware dynamic weighted fusion model
+                dynamic_preds, dynamic_labels, _ = \
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, \
+                        masked_modality=None, text_weight=predicted_tcp_t, video_weight=predicted_tcp_v, audio_weight=predicted_tcp_a)
+
+                # TODO: Add confidence-aware dynamic Cross-modal Knowledge-based fusion model
+                
+
                 cls_loss = self.get_cls_loss(predicted_scores, emo_label)
-                loss = cls_loss
+                dynamic_cls_loss = self.get_cls_loss(dynamic_preds, emo_label)
 
                 conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
 
-                eval_loss.append(loss.item())
-                eval_conf_loss.append(conf_loss.item())
+                eval_loss.append(cls_loss.item())
+                dynamic_eval_loss.append(dynamic_cls_loss.item())
 
                 y_pred.append(predicted_labels.detach().cpu().numpy())
+                y_pred_dynamic.append(dynamic_labels.detach().cpu().numpy())
                 y_true.append(emo_label.detach().cpu().numpy())
 
-                result["id"] = ids
-                result["input_sentence"] = actual_words
-                result["label"] = np.where(emo_label.detach().cpu().numpy() == 1)
-                result["prediction"] = predicted_labels.detach().cpu().numpy()
+                result["id"] = ids[0]
+                result["input_sentence"] = actual_words[0]
+                result["label"] = emo_label.detach().cpu().numpy()[0]
+                result["prediction"] = predicted_labels.detach().cpu().numpy()[0]
                 result["confidence"] = predicted_tcp.detach().cpu().numpy()
                 result["confidence-t"] = predicted_tcp_t.detach().cpu().numpy()
                 result["confidence-v"] = predicted_tcp_v.detach().cpu().numpy()
@@ -160,6 +165,7 @@ class Inference(object):
                 results.append(result)
 
                 eval_values = get_metrics(emo_label.detach().cpu().numpy(), predicted_labels.detach().cpu().numpy())
+                eval_values_dynamic = get_metrics(emo_label.detach().cpu().numpy(), dynamic_labels.detach().cpu().numpy())
 
                 # wandb.log(
                 #     (
@@ -179,7 +185,12 @@ class Inference(object):
                 # )
 
         columns = ["id", "input_sentence", "label", "prediction", "confidence", "confidence-t", "confidence-v", "confidence-a"]
-        with open('results.csv', 'w') as f:
+        if self.config.conf_scale:
+            file_name = "results_scaled.csv"
+        else:
+            file_name = "results.csv"
+
+        with open(os.getcwd() + file_name, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=columns)
             writer.writeheader()
             writer.writerows(results)
@@ -187,16 +198,38 @@ class Inference(object):
 
         eval_loss = np.mean(eval_loss)
         eval_conf_loss = np.mean(eval_conf_loss)
+        dynamic_eval_loss = np.mean(dynamic_eval_loss)
         y_true = np.concatenate(y_true, axis=0).squeeze()
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
+        y_pred_dynamic = np.concatenate(y_pred_dynamic, axis=0).squeeze()
 
         accuracy = get_accuracy(y_true, y_pred)
+        dynamic_accuracy = get_accuracy(y_true, y_pred_dynamic)
 
         print("="*50)
         print("Loss: {:.4f}, Conf Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, eval_conf_loss, accuracy))
         eval_values = get_metrics(y_true, y_pred)
+        dynamic_eval_values = get_metrics(y_true, y_pred_dynamic)
         print("Precision: {:.4f}, Recall: {:.4f}, F1: {:.4f}".format(eval_values['precision'], eval_values['recall'], eval_values['f1']))
         print("="*50)
+
+        # Save metric results into json
+        total_results = {
+            "loss": eval_loss,
+            "conf_loss": eval_conf_loss,
+            "accuracy": accuracy,
+            "precision": eval_values['precision'],
+            "recall": eval_values['recall'],
+            "f1": eval_values['f1'],
+            "dynamic_model_loss": dynamic_eval_loss,
+            "dynamic_model_accuracy": dynamic_accuracy,
+            "dynamic_model_precision": dynamic_eval_values['precision'],
+            "dynamic_model_recall": dynamic_eval_values['recall'],
+            "dynamic_model_f1": dynamic_eval_values['f1']
+        }
+        with open(os.getcwd() + "/results.json", 'w') as f:
+            json.dump(total_results, f)
+
 
 
     def get_cls_loss(self, predicted_scores, emo_label):
@@ -230,13 +263,9 @@ class Inference(object):
         tcp_batch = to_gpu(torch.tensor(tcp_batch))
         tcp_loss = self.loss_tcp(predicted_tcp, tcp_batch)
 
-        # pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
+        mcp_loss = self.loss_mcp(pred, truth) * self.train_config.mcp_weight
 
-        # for i in range(truth.size(0)):
-        #     mcp_loss += self.loss_mcp(pred[i], truth[i])
-        # mcp_loss = mcp_loss / truth.size(0)
-
-        return tcp_loss
+        return tcp_loss + mcp_loss
 
 
 def main():

@@ -9,6 +9,7 @@ from torch.autograd import Function
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from transformers import BertModel, BertConfig
 from maskedtensor import as_masked_tensor, masked_tensor
+from sklearn.preprocessing import MinMaxScaler
 
 from utils import to_gpu, to_cpu
 from utils import ReverseLayerF, getBinaryTensor
@@ -28,18 +29,29 @@ class EmotionClassifier(nn.Module):
         return out
 
 class ConfidenceRegressionNetwork(nn.Module):
-    def __init__(self, input_dims, num_classes=1, dropout=0.1):
+    def __init__(self, config, input_dims, num_classes=1, dropout=0.1):
         super(ConfidenceRegressionNetwork, self).__init__()
+        self.config = config
         self.mlp = nn.Sequential(
             nn.Linear(input_dims, 128),
             nn.ReLU(),
             nn.BatchNorm1d(128),
             nn.Dropout(dropout),
             nn.Linear(128, num_classes))
+
+        # Transform features by scaling them to [0, 1]
+        self.scaler = MinMaxScaler()
     
     def forward(self, seq_input):
         out = self.mlp(seq_input)
-        return out
+
+        if self.config.conf_scale:
+            self.scaler.fit(out.cpu().detach().numpy())
+            scaled_out = self.scaler.transform(out.cpu().detach().numpy())
+            scaled_out = torch.from_numpy(scaled_out).to(self.config.device).squeeze()
+            return scaled_out
+        else:
+            return out
 
 class MISA(nn.Module):
     """MISA model for CMU-MOSEI emotion multi-label classification"""
@@ -115,15 +127,15 @@ class MISA(nn.Module):
         ##########################################
         # unimodal classifiers
         ##########################################
-        if self.config.freeze == 'False':
-            self.classifier_t = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
-            self.classifier_v = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
-            self.classifier_a = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
+        # if self.config.freeze == 'False':
+        #     self.classifier_t = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
+        #     self.classifier_v = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
+        #     self.classifier_a = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
 
 
-        self.confid_t = ConfidenceRegressionNetwork(config.hidden_size)
-        self.confid_v = ConfidenceRegressionNetwork(config.hidden_size)
-        self.confid_a = ConfidenceRegressionNetwork(config.hidden_size)
+        # self.confid_t = ConfidenceRegressionNetwork(config.hidden_size)
+        # self.confid_v = ConfidenceRegressionNetwork(config.hidden_size)
+        # self.confid_a = ConfidenceRegressionNetwork(config.hidden_size)
 
 
         ##########################################
@@ -178,7 +190,7 @@ class MISA(nn.Module):
         self.sp_discriminator = nn.Sequential()
         self.sp_discriminator.add_module('sp_discriminator_layer_1', nn.Linear(in_features=config.hidden_size, out_features=4))
 
-        self.confidence = ConfidenceRegressionNetwork(config.hidden_size*6)
+        self.confidence = ConfidenceRegressionNetwork(config, config.hidden_size*6)
         self.classifier = EmotionClassifier(config.hidden_size*6, num_classes=output_size,dropout=dropout_rate)
         self.tlayer_norm = nn.LayerNorm((hidden_sizes[0]*2,))
         self.vlayer_norm = nn.LayerNorm((hidden_sizes[1]*2,))
@@ -208,7 +220,7 @@ class MISA(nn.Module):
         return final_h1, final_h2
 
     def forward(self, sentences, visual, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask,
-                  label_input, label_mask, groundTruth_labels=None, training=True, masked_modality=None):
+                  label_input, label_mask, masked_modality=None, text_weight=None, video_weight=None, audio_weight=None):
         """
         visual: (L, B, Dv)
         aucoustic: (L, B, Da)
@@ -251,18 +263,7 @@ class MISA(nn.Module):
         # extract features from acoustic modality
         final_h1a, final_h2a = self.extract_features(acoustic, lengths, self.arnn1, self.arnn2, self.alayer_norm)
         utterance_audio = torch.cat((final_h1a, final_h2a), dim=2).permute(1, 0, 2).contiguous().view(batch_size, -1)
-        
 
-        # TODO: modality-masking
-        if masked_modality == "text":
-            mask = torch.zeros_like(utterance_text) > 0
-            utterance_text = utterance_text * mask.int().float()
-        elif masked_modality == "video":
-            mask = torch.zeros_like(utterance_video) > 0
-            utterance_video = utterance_video * mask.int().float()
-        elif masked_modality == "audio":
-            mask = torch.zeros_like(utterance_audio) > 0
-            utterance_audio = utterance_audio * mask.int().float()
 
         # Shared-private encoders
         self.shared_private(utterance_text, utterance_video, utterance_audio)
@@ -290,6 +291,29 @@ class MISA(nn.Module):
         
         # For reconstruction
         self.reconstruct()
+
+        # Modalilty masking before fusion with zero padding
+        if masked_modality == "text":
+            self.utt_private_t = torch.zeros_like(self.utt_private_t)
+            self.utt_shared_t = torch.zeros_like(self.utt_shared_t)
+        elif masked_modality == "video":
+            self.utt_private_v = torch.zeros_like(self.utt_private_v)
+            self.utt_shared_v = torch.zeros_like(self.utt_shared_v)
+        elif masked_modality == "audio":
+            self.utt_private_a = torch.zeros_like(self.utt_private_a)
+            self.utt_shared_a = torch.zeros_like(self.utt_shared_a)
+        
+        # Confidence-aware weghted fusion
+        if text_weight is not None:
+            self.utt_private_t = self.utt_private_t * (1 - text_weight)
+            self.utt_shared_t = self.utt_shared_t * (1 - text_weight)
+        elif video_weight is not None:
+            self.utt_private_v = self.utt_private_v * (1 - video_weight)
+            self.utt_shared_v = self.utt_shared_v * (1 - video_weight)
+        elif audio_weight is not None:
+            self.utt_private_a = self.utt_private_a * (1 - audio_weight)
+            self.utt_shared_a = self.utt_shared_a * (1 - audio_weight)
+        
         
         # 1-LAYER TRANSFORMER FUSION
         h = torch.stack((self.utt_private_t, self.utt_private_v, self.utt_private_a, self.utt_shared_t, self.utt_shared_v,  self.utt_shared_a), dim=0)

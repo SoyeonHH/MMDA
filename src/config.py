@@ -109,7 +109,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--use_confidNet', type=str2bool, default=False)
-    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
 
@@ -127,7 +127,7 @@ def get_config(parse=True, **optional_kwargs):
     time_now = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     parser.add_argument('--name', type=str, default=f"{time_now}")
     parser.add_argument('--num_classes', type=int, default=6)   # Fixed to classify
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--eval_batch_size', type=int, default=10)
     parser.add_argument('--n_epoch', type=int, default=40)
     parser.add_argument('--patience', type=int, default=6)
@@ -159,7 +159,9 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--model', type=str,
                         default='MISA', help='one of {MISA, TextBert, AudioLSTM, VideoLSTM}')
     parser.add_argument('--conf_lr', type=float, default=1e-5)
-    parser.add_argument('--conf_dropout', type=float, default=0.5)
+    parser.add_argument('--conf_dropout', type=float, default=0.7)
+    parser.add_argument('--conf_scale', type=str2bool, default=False)
+    parser.add_argument('--mcp_weight', type=float, default=0.1)
 
     # Parse arguments
     if parse:

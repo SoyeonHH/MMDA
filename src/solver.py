@@ -62,7 +62,7 @@ class Solver(object):
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
         # bulid confidence model
-        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config.hidden_size*6, \
+        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config, self.train_config.hidden_size*6, \
             num_classes=1, dropout=self.train_config.conf_dropout)
         self.confidence_model = to_gpu(self.confidence_model)
         self.confidence_optimizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.conf_lr)
@@ -158,8 +158,8 @@ class Solver(object):
                 bert_sent_mask = to_gpu(bert_sent_mask)
                 label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-                predicted_scores, predicted_labels, _ = self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
-                          label_input, label_mask, groundTruth_labels=emo_label, training=True, masked_modality=None)
+                predicted_scores, predicted_labels, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, masked_modality=None)
                 # y_tilde = y_tilde.squeeze()
 
                 
@@ -205,7 +205,9 @@ class Solver(object):
             train_avg_loss = round(np.mean(train_loss), 4)
             print(f"Training loss: {train_avg_loss}")
 
+            ##########################################
             # train tcp
+            ##########################################
             train_avg_loss_conf = self.train_tcp(self.model)
 
             ##########################################
@@ -371,8 +373,7 @@ class Solver(object):
                 label_mask = to_gpu(label_mask)
 
                 predicted_scores, predicted_labels, hidden_state = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, \
-                        label_input, label_mask, groundTruth_labels=emo_label, training=False, masked_modality=None)       
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, masked_modality=None)       
                 # y_tilde = y_tilde.squeeze()
 
                 if self.train_config.data == "ur_funny":
@@ -416,6 +417,7 @@ class Solver(object):
         print("training confidence model...")
         for idx, batch in enumerate(tqdm(self.train_data_loader)):
             self.confidence_model.zero_grad()
+            self.confidence_optimizer.zero_grad()
 
             _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
             label_input, label_mask = self.get_label_input()
@@ -434,13 +436,15 @@ class Solver(object):
             label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
             predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
-                        label_input, label_mask, groundTruth_labels=emo_label, training=True, masked_modality=None)
+                        label_input, label_mask, masked_modality=None)
             
             predicted_confidence = self.confidence_model(hidden_state)
             emo_label = emo_label.type(torch.float)
 
             conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_confidence)
-
+            
+            # conf_loss.is_leaf = True
+            # conf_loss.requires_grad = True
             conf_loss.backward()
             self.confidence_optimizer.step()
 
@@ -560,8 +564,10 @@ class Solver(object):
 
         # pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
 
+        mcp_loss = self.loss_mcp(pred, truth)
+
         # for i in range(truth.size(0)):
         #     mcp_loss += self.loss_mcp(pred[i], truth[i])
         # mcp_loss = mcp_loss / truth.size(0)
 
-        return tcp_loss
+        return torch.add(tcp_loss, mcp_loss, alpha=self.train_config.mcp_weight)
