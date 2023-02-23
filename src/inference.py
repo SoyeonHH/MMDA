@@ -140,7 +140,7 @@ class Inference(object):
                         masked_modality=None, text_weight=predicted_tcp_t, video_weight=predicted_tcp_v, audio_weight=predicted_tcp_a)
 
                 # TODO: Add confidence-aware dynamic Cross-modal Knowledge-based fusion model
-                
+
 
                 cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 dynamic_cls_loss = self.get_cls_loss(dynamic_preds, emo_label)
@@ -149,6 +149,7 @@ class Inference(object):
 
                 eval_loss.append(cls_loss.item())
                 dynamic_eval_loss.append(dynamic_cls_loss.item())
+                eval_conf_loss.aapend(conf_loss.item())
 
                 y_pred.append(predicted_labels.detach().cpu().numpy())
                 y_pred_dynamic.append(dynamic_labels.detach().cpu().numpy())
@@ -186,9 +187,9 @@ class Inference(object):
 
         columns = ["id", "input_sentence", "label", "prediction", "confidence", "confidence-t", "confidence-v", "confidence-a"]
         if self.config.conf_scale:
-            file_name = "results_scaled.csv"
+            file_name = "/MMDA/results_scaled.csv"
         else:
-            file_name = "results.csv"
+            file_name = "/MMDA/results.csv"
 
         with open(os.getcwd() + file_name, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=columns)
@@ -227,7 +228,7 @@ class Inference(object):
             "dynamic_model_recall": dynamic_eval_values['recall'],
             "dynamic_model_f1": dynamic_eval_values['f1']
         }
-        with open(os.getcwd() + "/results.json", 'w') as f:
+        with open(os.getcwd() + "/MMDA/results.json", 'w') as f:
             json.dump(total_results, f)
 
 
@@ -263,9 +264,12 @@ class Inference(object):
         tcp_batch = to_gpu(torch.tensor(tcp_batch))
         tcp_loss = self.loss_tcp(predicted_tcp, tcp_batch)
 
-        mcp_loss = self.loss_mcp(pred, truth) * self.train_config.mcp_weight
+        mcp_loss = self.loss_mcp(pred, truth) * self.config.mcp_weight
 
-        return tcp_loss + mcp_loss
+        if self.config.use_mcp:
+            return torch.add(tcp_loss, mcp_loss, alpha=self.train_config.mcp_weight)
+        else:
+            return tcp_loss
 
 
 def main():

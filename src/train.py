@@ -73,8 +73,8 @@ def main():
     solver.train()
 
     # Test the model
-    tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
-    tester.inference()
+    # tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
+    # tester.inference()
 
 
 if __name__ == "__main__":

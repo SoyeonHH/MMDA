@@ -569,5 +569,8 @@ class Solver(object):
         # for i in range(truth.size(0)):
         #     mcp_loss += self.loss_mcp(pred[i], truth[i])
         # mcp_loss = mcp_loss / truth.size(0)
-
-        return torch.add(tcp_loss, mcp_loss, alpha=self.train_config.mcp_weight)
+        
+        if self.train_config.use_mcp:
+            return torch.add(tcp_loss, mcp_loss, alpha=self.train_config.mcp_weight)
+        else:
+            return tcp_loss
