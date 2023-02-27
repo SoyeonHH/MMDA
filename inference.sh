@@ -1,0 +1,1 @@
+python src/inference.py --data mosei --eval_mode micro --conf_lr 1e-5 --conf_dropout 0.7 --device cuda --batch_size 16

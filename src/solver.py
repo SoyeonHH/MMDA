@@ -246,16 +246,16 @@ class Solver(object):
                 print("Model Confidence: ", tcp)
                 print("-"*50)
 
-            # else:
-            #     curr_patience -= 1
-            #     if curr_patience <= -1:
-            #         print("Running out of patience, loading previous best model.")
-            #         num_trials -= 1
-            #         curr_patience = patience
-            #         self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
-            #         self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
-            #         lr_scheduler.step()
-            #         print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
+            else:
+                curr_patience -= 1
+                if curr_patience <= -1:
+                    print("Running out of patience, loading previous best model.")
+                    num_trials -= 1
+                    curr_patience = patience
+                    self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
+                    self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
+                    lr_scheduler.step()
+                    print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
             if self.train_config.eval_mode == "macro":
                 wandb.log(
@@ -381,8 +381,8 @@ class Solver(object):
                 
                 emo_label = emo_label.type(torch.float)
 
-                predicted_tcp = self.confidence_model(hidden_state)
-                predicted_tcp = predicted_tcp.squeeze()
+                predicted_tcp, scaled_tcp = self.confidence_model(hidden_state)
+                predicted_tcp, scaled_tcp = predicted_tcp.squeeze(), scaled_tcp.squeeze()
                 
                 cls_loss = self.get_cls_loss(predicted_scores, emo_label)
                 loss = cls_loss
@@ -438,7 +438,7 @@ class Solver(object):
             predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
                         label_input, label_mask, masked_modality=None)
             
-            predicted_confidence = self.confidence_model(hidden_state)
+            predicted_confidence, scaled_confidence = self.confidence_model(hidden_state)
             emo_label = emo_label.type(torch.float)
 
             conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_confidence)

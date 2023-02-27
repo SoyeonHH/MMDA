@@ -45,13 +45,11 @@ class ConfidenceRegressionNetwork(nn.Module):
     def forward(self, seq_input):
         out = self.mlp(seq_input)
 
-        if self.config.conf_scale:
-            self.scaler.fit(out.cpu().detach().numpy())
-            scaled_out = self.scaler.transform(out.cpu().detach().numpy())
-            scaled_out = torch.from_numpy(scaled_out).to(self.config.device).squeeze()
-            return scaled_out
-        else:
-            return out
+        self.scaler.fit(out.cpu().detach().numpy())
+        scaled_out = self.scaler.transform(out.cpu().detach().numpy())
+        scaled_out = torch.from_numpy(scaled_out).to(self.config.device).squeeze()
+
+        return out, scaled_out
 
 class MISA(nn.Module):
     """MISA model for CMU-MOSEI emotion multi-label classification"""
