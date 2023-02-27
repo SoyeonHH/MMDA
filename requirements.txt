@@ -28,11 +28,14 @@ mkl-fft==1.3.1
 mkl-random==1.2.2
 mkl-service==2.4.0
 numpy==1.23.5
+nvidia-cublas-cu11==11.10.3.66
+nvidia-cuda-nvrtc-cu11==11.7.99
+nvidia-cuda-runtime-cu11==11.7.99
+nvidia-cudnn-cu11==8.5.0.96
 packaging==23.0
 pandas==1.5.2
 pathtools==0.1.2
 Pillow==9.3.0
-pip==22.3.1
 protobuf==4.21.12
 psutil==5.9.4
 pycparser==2.21
@@ -50,12 +53,12 @@ scikit-metrics==0.1.0
 scipy==1.10.0
 sentry-sdk==1.14.0
 setproctitle==1.3.2
-setuptools==65.6.3
 simpful==2.9.0
-six==1.16.0
+six @ file:///tmp/build/80754af9/six_1644875935023/work
 sklearn==0.0.post1
 smart-open==6.3.0
 smmap==5.0.0
+TBB==0.2
 threadpoolctl==3.1.0
 tokenizers==0.13.2
 torch==1.13.1
@@ -67,4 +70,3 @@ typing_extensions==4.4.0
 urllib3==1.26.14
 validators==0.20.0
 wandb==0.13.9
-wheel==0.37.1
