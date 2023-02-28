@@ -109,15 +109,6 @@ class Solver(object):
         curr_patience = patience = self.train_config.patience
         num_trials = 1
 
-        # self.criterion = criterion = nn.L1Loss(reduction="mean")
-        self.criterion = criterion = nn.BCELoss(reduction="mean")
-        self.domain_loss_criterion = nn.CrossEntropyLoss(reduction="mean")
-        self.sp_loss_criterion = nn.CrossEntropyLoss(reduction="mean")
-        self.loss_diff = DiffLoss()
-        # self.loss_recon = MSE()
-        self.loss_recon = nn.MSELoss(reduction="mean")
-        self.loss_cmd = CMD()
-
         # Confidence regression loss
         self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
         self.loss_tcp = nn.MSELoss(reduction="mean")
@@ -131,10 +122,6 @@ class Solver(object):
         for e in range(self.train_config.n_epoch):
             self.model.train()
 
-            train_loss_cls, train_loss_sim, train_loss_diff = [], [], []
-            train_loss_recon = []
-            train_loss_sp = []
-            train_loss_conf = []
             train_loss = []
 
             # For label decoder inputs
@@ -158,47 +145,16 @@ class Solver(object):
                 bert_sent_mask = to_gpu(bert_sent_mask)
                 label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-                predicted_scores, predicted_labels, _ = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, masked_modality=None)
+                loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
                 # y_tilde = y_tilde.squeeze()
-
-                
-                if self.train_config.data == "ur_funny":
-                    y = y.squeeze()
-
-                emo_label = emo_label.type(torch.float)
-
-                cls_loss = self.get_cls_loss(predicted_scores, emo_label)
-                diff_loss = self.get_diff_loss()
-                domain_loss = self.get_domain_loss()
-                recon_loss = self.get_recon_loss()
-                cmd_loss = self.get_cmd_loss()
-                # conf_loss = self.get_conf_loss(predicted_scores, emo_label)
-                
-                if self.train_config.use_cmd_sim:
-                    similarity_loss = cmd_loss
-                else:
-                    similarity_loss = domain_loss
-                
-                loss = cls_loss + \
-                    self.train_config.diff_weight * diff_loss + \
-                    self.train_config.sim_weight * similarity_loss + \
-                    self.train_config.recon_weight * recon_loss
-
-                # if self.train_config.use_confidNet:
-                #     loss += self.train_config.conf_weight * conf_loss
 
                 loss.backward()
                 
                 torch.nn.utils.clip_grad_value_([param for param in self.model.parameters() if param.requires_grad], self.train_config.clip)
                 self.optimizer.step()
 
-                train_loss_cls.append(cls_loss.item())
-                train_loss_diff.append(diff_loss.item())
-                train_loss_recon.append(recon_loss.item())
                 train_loss.append(loss.item())
-                train_loss_sim.append(similarity_loss.item())
-                # train_loss_conf.append(conf_loss.item())
             
 
             train_losses.append(train_loss)
@@ -372,20 +328,14 @@ class Solver(object):
                 label_input = to_gpu(label_input)
                 label_mask = to_gpu(label_mask)
 
-                predicted_scores, predicted_labels, hidden_state = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, label_input, label_mask, masked_modality=None)       
-                # y_tilde = y_tilde.squeeze()
-
-                if self.train_config.data == "ur_funny":
-                    y = y.squeeze()
-                
-                emo_label = emo_label.type(torch.float)
+                loss, predicted_scores, predicted_labels, hidden_state = \
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, \
+                               masked_modality=None, training=False)
 
                 predicted_tcp, scaled_tcp = self.confidence_model(hidden_state)
+
+                emo_label = emo_label.type(torch.float)
                 predicted_tcp, scaled_tcp = predicted_tcp.squeeze(), scaled_tcp.squeeze()
-                
-                cls_loss = self.get_cls_loss(predicted_scores, emo_label)
-                loss = cls_loss
 
                 conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
 
@@ -411,6 +361,7 @@ class Solver(object):
 
 
     def train_tcp(self, model):
+        model.eval()
         self.confidence_model.train()
         train_loss_conf = []
 
@@ -435,8 +386,8 @@ class Solver(object):
             bert_sent_mask = to_gpu(bert_sent_mask)
             label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-            predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,\
-                        label_input, label_mask, masked_modality=None)
+            loss, predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label masked_modality=None, training=False)
             
             predicted_confidence, scaled_confidence = self.confidence_model(hidden_state)
             emo_label = emo_label.type(torch.float)
@@ -465,87 +416,6 @@ class Solver(object):
 
         return labels_embedding, labels_mask
     
-
-    def get_cls_loss(self, predicted_scores, emo_label):
-        if self.train_config.data == "ur_funny":
-            emo_label = emo_label.squeeze()
-        
-        emo_label = emo_label.type(torch.float)
-
-        predicted_scores, emo_label = torch.permute(predicted_scores, (1, 0)), torch.permute(emo_label, (1, 0)) # (num_classes, batch_size)
-
-        cls_loss = 0.0
-
-        # summation of loss for each label
-        for i in range(emo_label.size(0)):
-            cls_loss += self.criterion(predicted_scores[i], emo_label[i])
-
-        return cls_loss
-
-
-    def get_domain_loss(self,):
-
-        if self.train_config.use_cmd_sim:
-            return 0.0
-        
-        # Predicted domain labels
-        domain_pred_t = self.model.domain_label_t
-        domain_pred_v = self.model.domain_label_v
-        domain_pred_a = self.model.domain_label_a
-
-        # True domain labels
-        domain_true_t = to_gpu(torch.LongTensor([0]*domain_pred_t.size(0)))
-        domain_true_v = to_gpu(torch.LongTensor([1]*domain_pred_v.size(0)))
-        domain_true_a = to_gpu(torch.LongTensor([2]*domain_pred_a.size(0)))
-
-        # Stack up predictions and true labels
-        domain_pred = torch.cat((domain_pred_t, domain_pred_v, domain_pred_a), dim=0)
-        domain_true = torch.cat((domain_true_t, domain_true_v, domain_true_a), dim=0)
-
-        return self.domain_loss_criterion(domain_pred, domain_true)
-
-    def get_cmd_loss(self,):
-
-        if not self.train_config.use_cmd_sim:
-            return 0.0
-
-        # losses between shared states
-        loss = self.loss_cmd(self.model.utt_shared_t, self.model.utt_shared_v, 5)
-        loss += self.loss_cmd(self.model.utt_shared_t, self.model.utt_shared_a, 5)
-        loss += self.loss_cmd(self.model.utt_shared_a, self.model.utt_shared_v, 5)
-        loss = loss/3.0
-
-        return loss
-
-    def get_diff_loss(self):
-
-        shared_t = self.model.utt_shared_t
-        shared_v = self.model.utt_shared_v
-        shared_a = self.model.utt_shared_a
-        private_t = self.model.utt_private_t
-        private_v = self.model.utt_private_v
-        private_a = self.model.utt_private_a
-
-        # Between private and shared
-        loss = self.loss_diff(private_t, shared_t)
-        loss += self.loss_diff(private_v, shared_v)
-        loss += self.loss_diff(private_a, shared_a)
-
-        # Across privates
-        loss += self.loss_diff(private_a, private_t)
-        loss += self.loss_diff(private_a, private_v)
-        loss += self.loss_diff(private_t, private_v)
-
-        return loss
-    
-    def get_recon_loss(self, ):
-
-        loss = self.loss_recon(self.model.utt_t_recon, self.model.utt_t_orig)
-        loss += self.loss_recon(self.model.utt_v_recon, self.model.utt_v_orig)
-        loss += self.loss_recon(self.model.utt_a_recon, self.model.utt_a_orig)
-        loss = loss/3.0
-        return loss
-
 
     def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
         tcp_loss = 0.0

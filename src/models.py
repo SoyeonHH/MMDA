@@ -5,13 +5,14 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
-from torch.autograd import Function
+from torch.autograd import Function, Variable
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from transformers import BertModel, BertConfig
 from maskedtensor import as_masked_tensor, masked_tensor
 from sklearn.preprocessing import MinMaxScaler
 
-from utils import to_gpu, to_cpu
+from utils import to_gpu, to_cpu, DiffLoss, MSE, SIMSE, CMD
+from utils.functions import *
 from utils import ReverseLayerF, getBinaryTensor
 from modules.module_decoder import DecoderModel, DecoderConfig
 
@@ -68,6 +69,8 @@ class MISA(nn.Module):
         self.activation = self.config.activation()
         self.tanh = nn.Tanh()
 
+        ## Initialize the model
+
         if self.config.extractor == 'transformer':
             # TODO: Implement transformer encoder for feature extractors
             print("To do implement tranformer encoder")
@@ -91,10 +94,6 @@ class MISA(nn.Module):
             
             self.arnn1 = rnn(input_sizes[2], hidden_sizes[2], bidirectional=True)
             self.arnn2 = rnn(2*hidden_sizes[2], hidden_sizes[2], bidirectional=True)
-        
-        # Label Decoder
-        # decoder_config, _ = DecoderConfig.get_config('decoder-base', cache_dir=None, type_vocab_size=2, state_dict=None, task_config=config)
-        # self.decoder = DecoderModel(decoder_config)
 
 
         ##########################################
@@ -134,6 +133,7 @@ class MISA(nn.Module):
         # self.confid_t = ConfidenceRegressionNetwork(config.hidden_size)
         # self.confid_v = ConfidenceRegressionNetwork(config.hidden_size)
         # self.confid_a = ConfidenceRegressionNetwork(config.hidden_size)
+
 
 
         ##########################################
@@ -218,7 +218,7 @@ class MISA(nn.Module):
         return final_h1, final_h2
 
     def forward(self, sentences, visual, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask,
-                  label_input, label_mask, masked_modality=None, text_weight=None, video_weight=None, audio_weight=None):
+                  labels=None, masked_modality=None, text_weight=None, video_weight=None, audio_weight=None, training=True):
         """
         visual: (L, B, Dv)
         aucoustic: (L, B, Da)
@@ -230,8 +230,6 @@ class MISA(nn.Module):
         """
         
         batch_size = lengths.size(0)
-        label_input = label_input.unsqueeze(0).repeat(batch_size, 1)
-        label_mask = label_mask.unsqueeze(0).repeat(batch_size, 1)
         
         if self.config.use_bert:
             bert_output = self.bertmodel(input_ids=bert_sent, 
@@ -263,6 +261,9 @@ class MISA(nn.Module):
         utterance_audio = torch.cat((final_h1a, final_h2a), dim=2).permute(1, 0, 2).contiguous().view(batch_size, -1)
 
 
+        # TODO: cross modality knowledge transfer
+
+
         # Shared-private encoders
         self.shared_private(utterance_text, utterance_video, utterance_audio)
 
@@ -280,7 +281,6 @@ class MISA(nn.Module):
             self.domain_label_t = None
             self.domain_label_v = None
             self.domain_label_a = None
-
 
         self.shared_or_private_p_t = self.sp_discriminator(self.utt_private_t)
         self.shared_or_private_p_v = self.sp_discriminator(self.utt_private_v)
@@ -303,14 +303,14 @@ class MISA(nn.Module):
         
         # Confidence-aware weghted fusion
         if text_weight is not None:
-            self.utt_private_t = self.utt_private_t * (1 - text_weight)
-            self.utt_shared_t = self.utt_shared_t * (1 - text_weight)
+            self.utt_private_t = self.utt_private_t * text_weight
+            self.utt_shared_t = self.utt_shared_t * text_weight
         elif video_weight is not None:
-            self.utt_private_v = self.utt_private_v * (1 - video_weight)
-            self.utt_shared_v = self.utt_shared_v * (1 - video_weight)
+            self.utt_private_v = self.utt_private_v * video_weight
+            self.utt_shared_v = self.utt_shared_v * video_weight
         elif audio_weight is not None:
-            self.utt_private_a = self.utt_private_a * (1 - audio_weight)
-            self.utt_shared_a = self.utt_shared_a * (1 - audio_weight)
+            self.utt_private_a = self.utt_private_a * audio_weight
+            self.utt_shared_a = self.utt_shared_a * audio_weight
         
         
         # 1-LAYER TRANSFORMER FUSION
@@ -323,7 +323,34 @@ class MISA(nn.Module):
         predicted_scores = self.classifier(h)
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
-        return predicted_scores, predicted_labels, h
+
+
+        # Calculate loss
+        if self.config.data == "ur_funny":
+            y = y.squeeze()
+        
+        labels = labels.type(torch.float)
+
+        cls_loss = get_cls_loss(self.config, predicted_scores, labels)
+        domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
+        cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
+        diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
+        recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [utterance_text, utterance_video, utterance_audio])
+
+        if self.config.use_cmd_sim:
+            similarity_loss = cmd_loss
+        else:
+            similarity_loss = domain_loss
+
+        if training:
+            loss = cls_loss + \
+                self.config.diff_weight * diff_loss + \
+                self.config.sim_weight * similarity_loss + \
+                self.config.recon_weight * recon_loss
+        else:
+            loss = cls_loss
+
+        return loss, predicted_scores, predicted_labels, h
 
 
     
@@ -354,3 +381,12 @@ class MISA(nn.Module):
         self.utt_shared_v = self.shared(utterance_v)
         self.utt_shared_a = self.shared(utterance_a)
 
+    
+    def knowledge_transfer(self, t, v, a, weights=None):
+        # TODO: Implement knowledge transfer
+        if weights is None:
+            weights = [1.0, 1.0, 1.0]
+        t = t * weights[0]
+        v = v * weights[1]
+        a = a * weights[2]
+        return t, v, a

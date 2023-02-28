@@ -162,6 +162,10 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--conf_dropout', type=float, default=0.6)
     parser.add_argument('--use_mcp', type=str2bool, default=False)
     parser.add_argument('--mcp_weight', type=float, default=0.1)
+    
+    parser.add_argument('--use_kt', type=str2bool, default=False)
+    parser.add_argument('--kt_model', type=str, 
+                        default='Static', help='one of {Static, Dynamic-dist, Dynamic-tcp}')
 
     # Parse arguments
     if parse:
