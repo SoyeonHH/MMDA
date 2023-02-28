@@ -1,6 +1,7 @@
 from torch.autograd import Function, Variable
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 import numpy as np
 
 from utils import to_gpu, to_cpu
@@ -207,6 +208,40 @@ def get_recon_loss(utt_recon, utt_orig):
     return loss
 
 
+def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=0):
+    '''
+    shape of t: (batch_size, hidden_size)
+    shape of v: (batch_size, hidden_size)
+    shape of a: (batch_size, hidden_size)
+    shape of label: (batch_size, num_classes=6)
+    '''
+
+    # TODO: Implement knowledge transfer
+    if dynamic_weight is None:
+        dynamic_weight = [0, 0, 0, 0, 0, 0]
+    
+    if config.kt_model == 'Static':
+        # loss_t_v = dynamic_weight[0] * cosine_similarity_loss(t, v) + supervised_weight * supervised_loss(t, label)
+        loss_t = cosine_similarity_loss(t, v) + cosine_similarity_loss(t, a)
+        loss_v = cosine_similarity_loss(v, t) + cosine_similarity_loss(v, a)
+        loss_a = cosine_similarity_loss(a, t) + cosine_similarity_loss(a, v)
+
+        return loss_t + loss_v + loss_a
+    
+    elif config.kt_model == 'Dynamic-tcp':
+        loss_t_v = dynamic_weight[0] * cosine_similarity_loss(t, v)
+        loss_t_a = dynamic_weight[1] * cosine_similarity_loss(t, a)
+        
+        loss_v_t = dynamic_weight[2] * cosine_similarity_loss(v, t)
+        loss_v_a = dynamic_weight[3] * cosine_similarity_loss(v, a)
+
+        loss_a_t = dynamic_weight[4] * cosine_similarity_loss(a, t)
+        loss_a_v = dynamic_weight[5] * cosine_similarity_loss(a, v)
+
+    return t, v, a
+
+
+
 def get_conf_loss(config, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
     
     loss_mcp = nn.CrossEntropyLoss(reduction="mean")
@@ -270,7 +305,7 @@ def cosine_similarity_loss(source_net, target_net, dim=1, eps=1e-8):
 
 
 def supervised_loss(source_net, targets, eps=1e-8):
-    
+    # TODO: modify labels to be a multi-label vector
     labels = targets.cpu().numpy()
     target_sim = np.zeros((labels.shape[0], labels.shape[0]), dtype='float32')
     for i in range(labels.shape[0]):
@@ -298,4 +333,18 @@ def supervised_loss(source_net, targets, eps=1e-8):
     # Calculate KL divergence
     loss = torch.mean(target_similarity * torch.log((target_similarity + eps) / (source_similarity + eps)))
 
+    return loss
+
+
+def distillation_loss(output, target, T):
+    """
+    Distillation Loss
+    :param output:
+    :param target:
+    :param T:
+    :return:
+    """
+    output = F.log_softmax(output / T)
+    target = F.softmax(target / T)
+    loss = -torch.sum(target * output) / output.size()[0]
     return loss
