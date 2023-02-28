@@ -137,7 +137,7 @@ class Inference(object):
                     predicted_tcp.squeeze(), predicted_tcp_t.squeeze(), predicted_tcp_v.squeeze(), predicted_tcp_a.squeeze()
                 
                 
-                # Calculate weight
+                # Calculate weight - method 2
                 text_weight.append(torch.sub(predicted_tcp.item(), predicted_tcp_t.item()))
                 video_weight.append(torch.sub(predicted_tcp.item(), predicted_tcp_v.item()))
                 audio_weight.append(torch.sub(predicted_tcp.item(), predicted_tcp_a.item()))
@@ -213,7 +213,12 @@ class Inference(object):
 
 
         columns = ["id", "input_sentence", "label", "prediction", "confidence", "confidence-t", "confidence-v", "confidence-a", "prediction-dynamic"]
-        file_name = "/results_weighted(2)-dropout(0.6)-confidNet-dropout(0.5)-batchsize(16).csv"
+        if self.config.use_kt:
+            file_name = "/results_kt-{}-dropout({})-confidNet-dropout({})-batchsize({}).csv".format(\
+            self.config.kt_model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
+        else:
+            file_name = "/results_{}-dropout({})-confidNet-dropout({})-batchsize({}).csv".format(\
+                self.config.model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
 
         with open(os.getcwd() + file_name, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=columns)
@@ -249,7 +254,15 @@ class Inference(object):
             "dynamic_model_recall": dynamic_eval_values['recall'],
             "dynamic_model_f1": dynamic_eval_values['f1']
         }
-        with open(os.getcwd() + "/results_weighted(2)-dropout(0.6)-confidNet-dropout(0.5)-batchsize(16).json", 'w') as f:
+        
+        if self.config.use_kt:
+            json_name = "/results_kt-{}-dropout({})-confidNet-dropout({})-batchsize({}).json".format(\
+            self.config.kt_model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
+        else:
+            json_name = "/results_{}-dropout({})-confidNet-dropout({})-batchsize({}).json".format(\
+                self.config.model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
+
+        with open(os.getcwd() + json_name, 'w') as f:
             json.dump(total_results, f)
 
 
