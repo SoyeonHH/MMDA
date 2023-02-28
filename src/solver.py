@@ -387,7 +387,7 @@ class Solver(object):
             label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
             loss, predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label masked_modality=None, training=False)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
             
             predicted_confidence, scaled_confidence = self.confidence_model(hidden_state)
             emo_label = emo_label.type(torch.float)

@@ -11,15 +11,15 @@ import torch.nn as nn
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # path to a pretrained word embedding file
-word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
-# word_emb_path = '/data1/multimodal/glove.840B.300d.txt'
+# word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
+word_emb_path = '/data2/multimodal/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
-sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
-data_dir = Path('/home/iknow/workspace/multimodal')
-# sdk_dir = Path('/data1/multimodal/CMU-MultimodalSDK')
-# data_dir = Path('/data1/multimodal')
+# sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
+# data_dir = Path('/home/iknow/workspace/multimodal')
+sdk_dir = Path('/data2/multimodal/CMU-MultimodalSDK')
+data_dir = Path('/data2/multimodal')
 data_dict = {'mosi': data_dir.joinpath('MOSI'), 'mosei': data_dir.joinpath('MOSEI')}
 optimizer_dict = {'RMSprop': optim.RMSprop, 'Adam': optim.Adam}
 activation_dict = {'elu': nn.ELU, "hardshrink": nn.Hardshrink, "hardtanh": nn.Hardtanh,
@@ -109,7 +109,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--use_confidNet', type=str2bool, default=False)
-    parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
 
@@ -159,7 +159,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--model', type=str,
                         default='MISA', help='one of {MISA, TextBert, AudioLSTM, VideoLSTM}')
     parser.add_argument('--conf_lr', type=float, default=1e-5)
-    parser.add_argument('--conf_dropout', type=float, default=0.6)
+    parser.add_argument('--conf_dropout', type=float, default=0.5)
     parser.add_argument('--use_mcp', type=str2bool, default=False)
     parser.add_argument('--mcp_weight', type=float, default=0.1)
     

@@ -8,7 +8,6 @@ import torch.nn as nn
 from torch.autograd import Function, Variable
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from transformers import BertModel, BertConfig
-from maskedtensor import as_masked_tensor, masked_tensor
 from sklearn.preprocessing import MinMaxScaler
 
 from utils import to_gpu, to_cpu, DiffLoss, MSE, SIMSE, CMD
@@ -335,7 +334,7 @@ class MISA(nn.Module):
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
         cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
-        recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [utterance_text, utterance_video, utterance_audio])
+        recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [self.utt_t, self.utt_v, self.utt_a])
 
         if self.config.use_cmd_sim:
             similarity_loss = cmd_loss
