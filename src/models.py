@@ -229,6 +229,7 @@ class MISA(nn.Module):
         """
         
         batch_size = lengths.size(0)
+        labels = labels.type(torch.float)
         
         if self.config.use_bert:
             bert_output = self.bertmodel(input_ids=bert_sent, 
@@ -258,9 +259,6 @@ class MISA(nn.Module):
         # extract features from acoustic modality
         final_h1a, final_h2a = self.extract_features(acoustic, lengths, self.arnn1, self.arnn2, self.alayer_norm)
         utterance_audio = torch.cat((final_h1a, final_h2a), dim=2).permute(1, 0, 2).contiguous().view(batch_size, -1)
-
-
-        # TODO: cross modality knowledge transfer
 
 
         # Shared-private encoders
@@ -327,14 +325,14 @@ class MISA(nn.Module):
         # Calculate loss
         if self.config.data == "ur_funny":
             y = y.squeeze()
-        
-        labels = labels.type(torch.float)
+
 
         cls_loss = get_cls_loss(self.config, predicted_scores, labels)
+        kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels)
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
         cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
-        recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [self.utt_t, self.utt_v, self.utt_a])
+        recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [self.utt_t_orig, self.utt_v_orig, self.utt_a_orig])
 
         if self.config.use_cmd_sim:
             similarity_loss = cmd_loss
@@ -346,6 +344,8 @@ class MISA(nn.Module):
                 self.config.diff_weight * diff_loss + \
                 self.config.sim_weight * similarity_loss + \
                 self.config.recon_weight * recon_loss
+            if self.config.use_kt:
+                loss += self.config.kt_weight * kt_loss
         else:
             loss = cls_loss
 
@@ -380,12 +380,3 @@ class MISA(nn.Module):
         self.utt_shared_v = self.shared(utterance_v)
         self.utt_shared_a = self.shared(utterance_a)
 
-    
-    def knowledge_transfer(self, t, v, a, weights=None):
-        # TODO: Implement knowledge transfer
-        if weights is None:
-            weights = [1.0, 1.0, 1.0]
-        t = t * weights[0]
-        v = v * weights[1]
-        a = a * weights[2]
-        return t, v, a
