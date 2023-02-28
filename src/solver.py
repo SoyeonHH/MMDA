@@ -361,7 +361,6 @@ class Solver(object):
 
 
     def train_tcp(self, model):
-        model.eval()
         self.confidence_model.train()
         train_loss_conf = []
 
