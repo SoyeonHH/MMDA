@@ -136,6 +136,8 @@ class Inference(object):
                 predicted_tcp, predicted_tcp_t, predicted_tcp_v, predicted_tcp_a = \
                     predicted_tcp.squeeze(), predicted_tcp_t.squeeze(), predicted_tcp_v.squeeze(), predicted_tcp_a.squeeze()
                 
+                
+                # Calculate weight
                 text_weight.append(torch.sub(predicted_tcp.item(), predicted_tcp_t.item()))
                 video_weight.append(torch.sub(predicted_tcp.item(), predicted_tcp_v.item()))
                 audio_weight.append(torch.sub(predicted_tcp.item(), predicted_tcp_a.item()))
