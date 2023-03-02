@@ -62,16 +62,105 @@ class Inference(object):
                 self.model.load_state_dict(torch.load(checkpoint))
             else:
                 self.model.load_state_dict(load_model(config, name=config.model))
+        
+        self.model = self.model.to(self.device)
 
-        if self.confidence_model is None:
+        if self.confidence_model is None and config.use_confidNet:
             self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.config, self.config.hidden_size*6, \
                 num_classes=1, dropout=self.config.conf_dropout)
             self.confidence_model.load_state_dict(load_model(config, name="confidNet"))
+
+            self.confidence_model = self.confidence_model.to(self.device)
         
-        self.model = self.model.to(self.device)
-        self.confidence_model = self.confidence_model.to(self.device)
+        
     
     def inference(self):
+        self.model.eval()
+
+        y_true, y_pred = [], []
+        eval_loss = []
+        results = []
+
+        with torch.no_grad():
+            for batch in tqdm(self.dataloader):
+                self.model.zero_grad()
+                result = dict()
+
+                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                label_input, label_mask = Solver.get_label_input()
+
+                t = to_gpu(t)
+                v = to_gpu(v)
+                a = to_gpu(a)
+                y = to_gpu(y)
+                emo_label = to_gpu(emo_label)
+                # l = to_gpu(l)
+                l = to_cpu(l)
+                bert_sent = to_gpu(bert_sent)
+                bert_sent_type = to_gpu(bert_sent_type)
+                bert_sent_mask = to_gpu(bert_sent_mask)
+                label_input = to_gpu(label_input)
+                label_mask = to_gpu(label_mask)
+
+                loss, predicted_scores, predicted_labels, hidden_state = \
+                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
+                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                
+                eval_loss.append(loss.item())
+                y_true.extend(emo_label.cpu().numpy())
+                y_pred.extend(predicted_labels.cpu().numpy())
+
+                result["id"] = ids
+                result["input_sentence"] = actual_words
+                result["label"] = emo_label.cpu().numpy()
+                result["prediction"] = predicted_labels.cpu().numpy()
+
+        eval_loss = np.mean(eval_loss)
+        y_true = np.concatenate(y_true, axis=0).squeeze()
+        y_pred = np.concatenate(y_pred, axis=0).squeeze()
+
+        columns = ["id", "input_sentence", "label", "prediction"]
+        if self.config.use_kt:
+            file_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).csv".format(\
+                self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
+        else:
+            file_name = "/resutls_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
+        
+        with open(os.getwd() + file_name, "w") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(results)
+        
+        # Total results log
+        accuracy = get_accuracy(y_true, y_pred)
+        eval_values = get_metrics(y_true, y_pred)
+
+        print("="*50)
+        print("Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, accuracy))
+        print("Precision: {:.4f}, Recall: {:.4f}, F1: {:.4f}".format(eval_values['precision'], eval_values['recall'], eval_values['f1']))
+        print("="*50)
+
+        # Save metric results into json
+        total_results = {
+            "loss": eval_loss,
+            "accuracy": accuracy,
+            "precision": eval_values['precision'],
+            "recall": eval_values['recall'],
+            "f1": eval_values['f1']
+        }
+
+        if self.config.use_kt:
+            json_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
+                self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
+        else:
+            json_name = "/results_{}_dropout({})-batchsize({}).json".format(self.config.model, self.config.dropout, self.config.batch_size)
+        
+        with open(os.getwd() + json_name, "w") as f:
+            json.dump(total_results, f, indent=4)
+
+
+    
+    def inference_with_confidnet(self):
         print("Start inference...")
         self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
         self.loss_tcp = nn.MSELoss(reduction="mean")
@@ -159,6 +248,7 @@ class Inference(object):
             eval_conf_loss = np.mean(eval_conf_loss)
             y_true = np.concatenate(y_true, axis=0).squeeze()
             y_pred = np.concatenate(y_pred, axis=0).squeeze()
+            
             
             # TODO: adaptive confidence 사용 여부 이용해서 조건문 달기.
             # Make modality-independenct weight score
@@ -301,7 +391,11 @@ def main():
     test_data_loader = get_loader(test_config, shuffle=False)
 
     tester = Inference(test_config, test_data_loader, checkpoint=args.checkpoint)
-    tester.inference()
+
+    if test_config.use_confidNet:
+        tester.inference_with_confidnet()
+    else:
+        tester.inference()
 
 
 if __name__ == "__main__":
