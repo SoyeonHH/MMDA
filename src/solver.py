@@ -187,6 +187,8 @@ class Solver(object):
                 if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
                 torch.save(self.model.state_dict(), f'checkpoints/model_{self.train_config.name}.std')
                 torch.save(self.optimizer.state_dict(), f'checkpoints/optim_{self.train_config.name}.std')
+                self.train_config.checkpoint = f'checkpoints/model_{self.train_config.name}.std'
+                
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
                 save_model(self.train_config, self.model, name=self.train_config.model)

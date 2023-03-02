@@ -58,7 +58,10 @@ class Inference(object):
 
         if self.model is None:
             self.model = getattr(models, config.model)(config)
-            self.model.load_state_dict(load_model(config, name=config.model))
+            if checkpoint:
+                self.model.load_state_dict(torch.load(checkpoint))
+            else:
+                self.model.load_state_dict(load_model(config, name=config.model))
 
         if self.confidence_model is None:
             self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.config, self.config.hidden_size*6, \
@@ -157,6 +160,7 @@ class Inference(object):
             y_true = np.concatenate(y_true, axis=0).squeeze()
             y_pred = np.concatenate(y_pred, axis=0).squeeze()
             
+            # TODO: adaptive confidence 사용 여부 이용해서 조건문 달기.
             # Make modality-independenct weight score
             scaler = MinMaxScaler()
             text_weight = scaler.fit_transform(np.array(text_weight).reshape(-1, 1)).squeeze()
@@ -187,13 +191,10 @@ class Inference(object):
                 emo_label = emo_label.type(torch.float)
 
 
-                # TODO: Add confidence-aware dynamic weighted fusion model
+                # confidence-aware dynamic weighted fusion model
                 dynamic_loss, dynamic_preds, dynamic_labels, _ = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, \
                         masked_modality=None, text_weight=text_weight[idx], video_weight=video_weight[idx], audio_weight=audio_weight[idx], training=False)
-
-                # TODO: Add confidence-aware dynamic Cross-modal Knowledge-based fusion model
-
 
 
                 dynamic_eval_loss.append(dynamic_loss.item())
@@ -214,8 +215,8 @@ class Inference(object):
 
         columns = ["id", "input_sentence", "label", "prediction", "confidence", "confidence-t", "confidence-v", "confidence-a", "prediction-dynamic"]
         if self.config.use_kt:
-            file_name = "/results_kt-{}-dropout({})-confidNet-dropout({})-batchsize({}).csv".format(\
-            self.config.kt_model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
+            file_name = "/results_kt-{}({})-dropout({})-confidNet-dropout({})-batchsize({}).csv".format(\
+            self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
         else:
             file_name = "/results_{}-dropout({})-confidNet-dropout({})-batchsize({}).csv".format(\
                 self.config.model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
@@ -256,8 +257,8 @@ class Inference(object):
         }
         
         if self.config.use_kt:
-            json_name = "/results_kt-{}-dropout({})-confidNet-dropout({})-batchsize({}).json".format(\
-            self.config.kt_model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
+            json_name = "/results_kt-{}({})-dropout({})-confidNet-dropout({})-batchsize({}).json".format(\
+            self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
         else:
             json_name = "/results_{}-dropout({})-confidNet-dropout({})-batchsize({}).json".format(\
                 self.config.model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
@@ -299,7 +300,7 @@ def main():
     test_config.batch_size = 1
     test_data_loader = get_loader(test_config, shuffle=False)
 
-    tester = Inference(test_config, test_data_loader)
+    tester = Inference(test_config, test_data_loader, checkpoint=args.checkpoint)
     tester.inference()
 
 

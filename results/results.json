@@ -1,0 +1,13 @@
+{
+    "loss": 2.83633887543666, 
+    "conf_loss": NaN, 
+    "accuracy": 0.4113, 
+    "precision": 0.3456931647782351, 
+    "recall": 0.5414064568494533, 
+    "f1": 0.41509008700355365, 
+    "dynamic_model_loss": 4.462938185638761, 
+    "dynamic_model_accuracy": 0.2079, 
+    "dynamic_model_precision": 0.19468141759247867, 
+    "dynamic_model_recall": 0.7101954717904956, 
+    "dynamic_model_f1": 0.2853160250836892
+}

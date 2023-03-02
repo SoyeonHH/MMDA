@@ -193,7 +193,6 @@ class MISA(nn.Module):
         self.vlayer_norm = nn.LayerNorm((hidden_sizes[1]*2,))
         self.alayer_norm = nn.LayerNorm((hidden_sizes[2]*2,))
         
-        # TODO: How to extract self-attention score
         encoder_layer = nn.TransformerEncoderLayer(d_model=self.config.hidden_size, nhead=2)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
 

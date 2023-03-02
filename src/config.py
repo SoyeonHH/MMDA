@@ -112,6 +112,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
+    parser.add_argument('--checkpoint', type=str, default=None)
 
     # Bert
     parser.add_argument('--use_bert', type=str2bool, default=True)
@@ -144,7 +145,6 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--weight_decay', type=float, default=0.1)
     parser.add_argument("--local_rank", default=0, type=int, help="distribted training") 
 
-    # TODO: Modify the model.py to adapt dynamic feature extractor (rnncell -> extractor)
     parser.add_argument('--extractor', type=str, default='lstm', help='one of {lstm, trasformer}')
     parser.add_argument('--rnncell', type=str, default='lstm')
     parser.add_argument('--embedding_size', type=int, default=300)
@@ -163,7 +163,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--use_mcp', type=str2bool, default=False)
     parser.add_argument('--mcp_weight', type=float, default=0.1)
     
-    parser.add_argument('--use_kt', type=str2bool, default=False)
+    parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
                         default='Static', help='one of {Static, Dynamic-dist, Dynamic-tcp}')
     parser.add_argument('--kt_weight', type=float, default=1.0)
