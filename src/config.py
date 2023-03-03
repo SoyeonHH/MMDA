@@ -159,13 +159,13 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--model', type=str,
                         default='MISA', help='one of {MISA, TextBert, AudioLSTM, VideoLSTM}')
     parser.add_argument('--conf_lr', type=float, default=1e-5)
-    parser.add_argument('--conf_dropout', type=float, default=0.5)
+    parser.add_argument('--conf_dropout', type=float, default=0.6)
     parser.add_argument('--use_mcp', type=str2bool, default=False)
     parser.add_argument('--mcp_weight', type=float, default=0.1)
     
     parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
-                        default='Static', help='one of {Static, Dynamic-dist, Dynamic-tcp}')
+                        default='Dynamic-tcp', help='one of {Static, Dynamic-dist, Dynamic-tcp}')
     parser.add_argument('--kt_weight', type=float, default=1.0)
 
     # Parse arguments

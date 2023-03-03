@@ -38,7 +38,7 @@ import models
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-class Solver(object):
+class Solver_DKT_Conf(object):
     def __init__(self, train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=None):
 
         self.train_config = train_config
@@ -126,13 +126,15 @@ class Solver(object):
         # total_start = time.time()
         for e in range(self.train_config.n_epoch):
             self.model.train()
+            for para in self.model.parameters():
+                para.requires_grad = True
 
             train_loss = []
 
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
+                label_input, label_mask = Solver_DKT_Conf.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -168,6 +170,9 @@ class Solver(object):
             ##########################################
 
             # TODO: return the tcp for each masked modality
+
+            # print(self.model.state_dict().keys())
+
             train_avg_loss_conf = self.train_tcp(self.model)
 
 
@@ -286,7 +291,6 @@ class Solver(object):
         ##########################################
 
         print("model training is finished.")
-        train_loss, train_loss_conf, acc, test_preds, test_truths, test_tcp = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results)
@@ -296,6 +300,16 @@ class Solver(object):
         print(f'F1 score: {best_f1}')
         print(f'Precision: {best_precision}')
         print(f'Recall: {best_recall}')
+
+        print('='*50)
+        print("Test results")
+        test_loss, test_loss_conf, acc, test_preds, test_truths, test_tcp = self.eval(mode="test", to_print=True)
+        eval_values = get_metrics(test_truths, test_preds)
+        print(f"Test loss: {test_loss}, Test loss conf: {test_loss_conf}")
+        print(f"Test accuracy: {eval_values['acc']}")
+        print(f"Test f1 score: {eval_values['micro_f1']}")
+        print(f"Test precision: {eval_values['micro_precision']}")
+        print(f"Test recall: {eval_values['micro_recall']}")
         # total_end = time.time()
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
@@ -328,7 +342,7 @@ class Solver(object):
                 self.confidence_model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
+                label_input, label_mask = Solver_DKT_Conf.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -376,16 +390,20 @@ class Solver(object):
 
 
     def train_tcp(self, model):
+
+        for para in self.model.parameters():
+            para.requires_grad = False
+
         self.confidence_model.train()
         train_loss_conf = []
 
-        print("training confidence model...")
+        print("Training confidence model...")
         for idx, batch in enumerate(tqdm(self.train_data_loader)):
             self.confidence_model.zero_grad()
             self.confidence_optimizer.zero_grad()
 
             _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-            label_input, label_mask = self.get_label_input()
+            label_input, label_mask = Solver_DKT_Conf.get_label_input()
 
             # batch_size = t.size(0)
             t = to_gpu(t)
@@ -400,7 +418,7 @@ class Solver(object):
             bert_sent_mask = to_gpu(bert_sent_mask)
             label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-            loss, predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, \
+            loss, predicted_scores, predicted_labels, hidden_state = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
             
             predicted_confidence, scaled_confidence = self.confidence_model(hidden_state)
