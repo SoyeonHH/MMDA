@@ -38,7 +38,6 @@ import models
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-
 class Solver(object):
     def __init__(self, train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=None):
 
@@ -61,6 +60,12 @@ class Solver(object):
         if self.model is None:
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
+        # bulid confidence model
+        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config, self.train_config.hidden_size*6, \
+            num_classes=1, dropout=self.train_config.conf_dropout)
+        self.confidence_model = to_gpu(self.confidence_model)
+        self.confidence_optimizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.conf_lr)
+
         # Final list
         for name, param in self.model.named_parameters():
 
@@ -102,12 +107,22 @@ class Solver(object):
     def train(self):
         curr_patience = patience = self.train_config.patience
         num_trials = 1
+
+        # Confidence regression loss
+        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
+        self.loss_tcp = nn.MSELoss(reduction="mean")
         
         best_valid_loss = float('inf')
         best_train_loss = float('inf')
         lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.5)
         
         train_losses = []
+        train_kt_loss = []
+
+        ##########################################
+        # 1. Train the Fusion model
+        ##########################################
+
         # total_start = time.time()
         for e in range(self.train_config.n_epoch):
             self.model.train()
@@ -148,12 +163,27 @@ class Solver(object):
             train_avg_loss = round(np.mean(train_loss), 4)
             print(f"Training loss: {train_avg_loss}")
 
+            ##########################################
+            # 2. Train tcp
+            ##########################################
+
+            # TODO: return the tcp for each masked modality
+            train_avg_loss_conf = self.train_tcp(self.model)
+
+
+            ##########################################
+            # 3. Train the Fusion model with dynamic weighted kt
+            ##########################################
+
+            # TODO: Implement this
+
+
 
             ##########################################
             # model evaluation with dev set
             ##########################################
 
-            valid_loss, valid_loss_conf, valid_acc, preds, truths = self.eval(mode="dev")
+            valid_loss, valid_loss_conf, valid_acc, preds, truths, tcp = self.eval(mode="dev")
 
             print("-" * 100)
             print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
@@ -175,6 +205,8 @@ class Solver(object):
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
                 save_model(self.train_config, self.model, name=self.train_config.model)
+                save_model(self.train_config, self.confidence_model, name="confidNet")
+                save_tcp(self.train_config, tcp, name="fusion_representation")
                 # Print best model results
                 eval_values = get_metrics(best_truths, best_results)
                 print("-"*50)
@@ -182,6 +214,7 @@ class Solver(object):
                     best_epoch, valid_loss, eval_values['acc'], eval_values['f1'], eval_values['precision'], eval_values['recall']))
                 # print("best results: ", best_results)
                 # print("best truths: ", best_truths)
+                print("Model Confidence: ", tcp)
                 print("-"*50)
 
             else:
@@ -205,6 +238,7 @@ class Solver(object):
                             "test_precision": eval_values['precision'],
                             "test_recall": eval_values['recall'],
                             "test_acc2": eval_values['acc'],
+                            "train_loss_conf": train_avg_loss_conf,
                             "valid_loss_conf": valid_loss_conf
                         }
                     )
@@ -219,6 +253,7 @@ class Solver(object):
                             "test_precision": eval_values['micro_precision'],
                             "test_recall": eval_values['micro_recall'],
                             "test_acc2": eval_values['acc'],
+                            "train_loss_conf": train_avg_loss_conf,
                             "valid_loss_conf": valid_loss_conf
                         }
                     )
@@ -233,6 +268,7 @@ class Solver(object):
                             "test_precision": eval_values['weighted_precision'],
                             "test_recall": eval_values['weighted_recall'],
                             "test_acc2": eval_values['acc'],
+                            "train_loss_conf": train_avg_loss_conf,
                             "valid_loss_conf": valid_loss_conf
                         }
                     )
@@ -250,7 +286,7 @@ class Solver(object):
         ##########################################
 
         print("model training is finished.")
-        train_loss, train_loss_conf, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
+        train_loss, train_loss_conf, acc, test_preds, test_truths, test_tcp = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results)
@@ -269,9 +305,11 @@ class Solver(object):
     def eval(self,mode=None, to_print=False):
         assert(mode is not None)
         self.model.eval()
+        self.confidence_model.eval()
 
         y_true, y_pred = [], []
-        eval_loss, eval_loss_diff = [], []
+        eval_loss, eval_loss_diff, eval_conf_loss = [], [], []
+        tcp = []
 
         if mode == "dev":
             dataloader = self.dev_data_loader
@@ -287,6 +325,7 @@ class Solver(object):
 
             for batch in dataloader:
                 self.model.zero_grad()
+                self.confidence_model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
                 label_input, label_mask = Solver.get_label_input()
@@ -308,23 +347,78 @@ class Solver(object):
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, \
                                masked_modality=None, training=False)
 
+                predicted_tcp, scaled_tcp = self.confidence_model(hidden_state)
+
+                emo_label = emo_label.type(torch.float)
+                predicted_tcp, scaled_tcp = predicted_tcp.squeeze(), scaled_tcp.squeeze()
+
+                conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
+
                 eval_loss.append(loss.item())
+                eval_conf_loss.append(conf_loss.item())
 
                 # y_tilde = torch.argmax(y_tilde, dim=1)
                 # emo_label = torch.argmax(emo_label, dim=1)
                 y_pred.append(predicted_labels.detach().cpu().numpy())
                 y_true.append(emo_label.detach().cpu().numpy())
+                tcp.append(predicted_tcp.detach().cpu().numpy())
 
 
         eval_loss = np.mean(eval_loss)
         eval_conf_loss = np.mean(eval_conf_loss)
         y_true = np.concatenate(y_true, axis=0).squeeze()   # (1871, 6)
         y_pred = np.concatenate(y_pred, axis=0).squeeze()   # (1871, 6)
+        tcp = np.concatenate(tcp).squeeze()   # (1871, 1)
 
         accuracy = get_accuracy(y_true, y_pred)
 
-        return eval_loss, eval_conf_loss, accuracy, y_pred, y_true
+        return eval_loss, eval_conf_loss, accuracy, y_pred, y_true, tcp
 
+
+    def train_tcp(self, model):
+        self.confidence_model.train()
+        train_loss_conf = []
+
+        print("training confidence model...")
+        for idx, batch in enumerate(tqdm(self.train_data_loader)):
+            self.confidence_model.zero_grad()
+            self.confidence_optimizer.zero_grad()
+
+            _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+            label_input, label_mask = self.get_label_input()
+
+            # batch_size = t.size(0)
+            t = to_gpu(t)
+            v = to_gpu(v)
+            a = to_gpu(a)
+            y = to_gpu(y)
+            emo_label = to_gpu(emo_label)
+            # l = to_gpu(l)
+            l = to_cpu(l)
+            bert_sent = to_gpu(bert_sent)
+            bert_sent_type = to_gpu(bert_sent_type)
+            bert_sent_mask = to_gpu(bert_sent_mask)
+            label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
+
+            loss, predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+            
+            predicted_confidence, scaled_confidence = self.confidence_model(hidden_state)
+            emo_label = emo_label.type(torch.float)
+
+            conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_confidence)
+            
+            # conf_loss.is_leaf = True
+            # conf_loss.requires_grad = True
+            conf_loss.backward()
+            self.confidence_optimizer.step()
+
+            train_loss_conf.append(conf_loss.item())
+        
+        train_avg_loss_conf = np.mean(train_loss_conf)
+        print(f"Confidence model Training loss: {train_avg_loss_conf}")
+
+        return train_avg_loss_conf
 
     @staticmethod
     def get_label_input():
@@ -335,3 +429,32 @@ class Solver(object):
         labels_mask = torch.from_numpy(labels_mask)
 
         return labels_embedding, labels_mask
+    
+
+    def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
+        tcp_loss = 0.0
+        mcp_loss = 0.0
+        tcp_batch = []
+
+        for i in range(truth.size(0)):  # for each batch
+            tcp = 0.0
+            for j in range(truth[i].size(0)):   # for each class
+                tcp += pred[i][j] * truth[i][j]
+            tcp = tcp / torch.count_nonzero(truth[i]) if torch.count_nonzero(truth[i]) != 0 else 0.0
+            tcp_batch.append(tcp)
+        
+        tcp_batch = to_gpu(torch.tensor(tcp_batch))
+        tcp_loss = self.loss_tcp(predicted_tcp, tcp_batch)
+
+        # pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
+
+        mcp_loss = self.loss_mcp(pred, truth)
+
+        # for i in range(truth.size(0)):
+        #     mcp_loss += self.loss_mcp(pred[i], truth[i])
+        # mcp_loss = mcp_loss / truth.size(0)
+        
+        if self.train_config.use_mcp:
+            return torch.add(tcp_loss, mcp_loss, alpha=self.train_config.mcp_weight)
+        else:
+            return tcp_loss

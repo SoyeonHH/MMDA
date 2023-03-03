@@ -11,15 +11,15 @@ import torch.nn as nn
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # path to a pretrained word embedding file
-word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
-# word_emb_path = '/data2/multimodal/glove.840B.300d.txt'
+# word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
+word_emb_path = '/data2/multimodal/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
-sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
-data_dir = Path('/home/iknow/workspace/multimodal')
-# sdk_dir = Path('/data2/multimodal/CMU-MultimodalSDK')
-# data_dir = Path('/data2/multimodal')
+# sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
+# data_dir = Path('/home/iknow/workspace/multimodal')
+sdk_dir = Path('/data2/multimodal/CMU-MultimodalSDK')
+data_dir = Path('/data2/multimodal')
 data_dict = {'mosi': data_dir.joinpath('MOSI'), 'mosei': data_dir.joinpath('MOSEI')}
 optimizer_dict = {'RMSprop': optim.RMSprop, 'Adam': optim.Adam}
 activation_dict = {'elu': nn.ELU, "hardshrink": nn.Hardshrink, "hardtanh": nn.Hardtanh,
