@@ -9,6 +9,7 @@ import wandb
 from config import get_config, activation_dict
 from data_loader import get_loader
 from solver import Solver
+from solver_dkt_conf import Solver_DKT_Conf
 from inference import Inference
 from utils.tools import *
 from transformers import BertTokenizer
@@ -40,7 +41,6 @@ def main():
     args = get_config()
     wandb.init(project="MISA-classification")
     wandb.config.update(args)
-    args.data='mosei'
 
     # Setting random seed
     random_name = str(random())
@@ -64,7 +64,10 @@ def main():
     test_data_loader = get_loader(test_config, shuffle = False)
 
     # Solver is a wrapper for model traiing and testing
-    solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    if args.use_kt == False or args.kt_model == 'Static':
+        solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    elif args.kt_model == 'Dynamic-tcp':
+        solver = Solver_DKT_Conf(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
 
     # Build the model
     solver.build()
