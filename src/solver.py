@@ -205,7 +205,6 @@ class Solver(object):
                             "test_precision": eval_values['precision'],
                             "test_recall": eval_values['recall'],
                             "test_acc2": eval_values['acc'],
-                            "valid_loss_conf": valid_loss_conf
                         }
                     )
                 )
@@ -219,7 +218,6 @@ class Solver(object):
                             "test_precision": eval_values['micro_precision'],
                             "test_recall": eval_values['micro_recall'],
                             "test_acc2": eval_values['acc'],
-                            "valid_loss_conf": valid_loss_conf
                         }
                     )
                 )
@@ -233,7 +231,6 @@ class Solver(object):
                             "test_precision": eval_values['weighted_precision'],
                             "test_recall": eval_values['weighted_recall'],
                             "test_acc2": eval_values['acc'],
-                            "valid_loss_conf": valid_loss_conf
                         }
                     )
                 )
