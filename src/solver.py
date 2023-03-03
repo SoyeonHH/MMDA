@@ -153,7 +153,7 @@ class Solver(object):
             # model evaluation with dev set
             ##########################################
 
-            valid_loss, valid_loss_conf, valid_acc, preds, truths = self.eval(mode="dev")
+            valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
 
             print("-" * 100)
             print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
@@ -250,7 +250,7 @@ class Solver(object):
         ##########################################
 
         print("model training is finished.")
-        train_loss, train_loss_conf, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
+        train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results)
@@ -317,13 +317,12 @@ class Solver(object):
 
 
         eval_loss = np.mean(eval_loss)
-        eval_conf_loss = np.mean(eval_conf_loss)
         y_true = np.concatenate(y_true, axis=0).squeeze()   # (1871, 6)
         y_pred = np.concatenate(y_pred, axis=0).squeeze()   # (1871, 6)
 
         accuracy = get_accuracy(y_true, y_pred)
 
-        return eval_loss, eval_conf_loss, accuracy, y_pred, y_true
+        return eval_loss, accuracy, y_pred, y_true
 
 
     @staticmethod
