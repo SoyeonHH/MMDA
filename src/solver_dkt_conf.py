@@ -38,7 +38,7 @@ import models
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-class Solver(object):
+class Solver_DKT_Conf(object):
     def __init__(self, train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=None):
 
         self.train_config = train_config
@@ -129,10 +129,13 @@ class Solver(object):
 
             train_loss = []
 
+            for para in self.model.parameters():
+                para.requires_grad = True
+
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
+                label_input, label_mask = Solver_DKT_Conf.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -328,7 +331,7 @@ class Solver(object):
                 self.confidence_model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
+                label_input, label_mask = Solver_DKT_Conf.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -379,13 +382,16 @@ class Solver(object):
         self.confidence_model.train()
         train_loss_conf = []
 
+        for para in self.model.parameters():
+            para.requires_grad = False
+
         print("training confidence model...")
         for idx, batch in enumerate(tqdm(self.train_data_loader)):
             self.confidence_model.zero_grad()
             self.confidence_optimizer.zero_grad()
 
             _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-            label_input, label_mask = self.get_label_input()
+            label_input, label_mask = Solver_DKT_Conf.get_label_input()
 
             # batch_size = t.size(0)
             t = to_gpu(t)
@@ -400,7 +406,7 @@ class Solver(object):
             bert_sent_mask = to_gpu(bert_sent_mask)
             label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-            loss, predicted_scores, predicted_labels, hidden_state = model(t, v, a, l, \
+            loss, predicted_scores, predicted_labels, hidden_state = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
             
             predicted_confidence, scaled_confidence = self.confidence_model(hidden_state)

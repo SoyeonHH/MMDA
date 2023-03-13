@@ -107,8 +107,8 @@ class Inference(object):
                         text_weight=None, video_weight=None, audio_weight=None, training=False)
                 
                 eval_loss.append(loss.item())
-                y_true.extend(emo_label.cpu().numpy())
-                y_pred.extend(predicted_labels.cpu().numpy())
+                y_true.append(emo_label.cpu().numpy())
+                y_pred.append(predicted_labels.cpu().numpy())
 
                 result["id"] = ids
                 result["input_sentence"] = actual_words
@@ -124,9 +124,9 @@ class Inference(object):
             file_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).csv".format(\
                 self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
         else:
-            file_name = "/resutls_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
+            file_name = "/results_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
         
-        with open(os.getwd() + file_name, "w") as f:
+        with open(os.getcwd() + file_name, "w") as f:
             writer = csv.DictWriter(f, fieldnames=columns)
             writer.writeheader()
             writer.writerows(results)
@@ -155,7 +155,7 @@ class Inference(object):
         else:
             json_name = "/results_{}_dropout({})-batchsize({}).json".format(self.config.model, self.config.dropout, self.config.batch_size)
         
-        with open(os.getwd() + json_name, "w") as f:
+        with open(os.getcwd() + json_name, "w") as f:
             json.dump(total_results, f, indent=4)
 
 
@@ -354,7 +354,7 @@ class Inference(object):
                 self.config.model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
 
         with open(os.getcwd() + json_name, 'w') as f:
-            json.dump(total_results, f)
+            json.dump(total_results, f, indent=4)
 
 
 

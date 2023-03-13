@@ -238,7 +238,7 @@ def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=
         loss_a_t = dynamic_weight[4] * cosine_similarity_loss(a, t)
         loss_a_v = dynamic_weight[5] * cosine_similarity_loss(a, v)
 
-    return t, v, a
+    return (loss_t_v + loss_t_a + loss_v_t + loss_v_a + loss_a_t + loss_a_v)
 
 
 
