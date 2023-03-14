@@ -338,13 +338,37 @@ class MISA(nn.Module):
         else:
             similarity_loss = domain_loss
 
-        if training:
+        if training:#elif args.kt_model == 'Dynamic-ce':
             loss = cls_loss + \
                 self.config.diff_weight * diff_loss + \
                 self.config.sim_weight * similarity_loss + \
                 self.config.recon_weight * recon_loss
-            if self.config.use_kt:
+            if (self.config.kt_model=="Dynamic-ce"):
+                
+                masked_t_h = torch.stack((torch.zeros_like(self.utt_private_t), self.utt_private_v, self.utt_private_a, torch.zeros_like(self.utt_shared_t), self.utt_shared_v,  self.utt_shared_a), dim=0)
+                masked_t_h = self.transformer_encoder(masked_t_h)
+                masked_t_h = torch.cat((masked_t_h[0], masked_t_h[1], masked_t_h[2], masked_t_h[3], masked_t_h[4], masked_t_h[5]), dim=1)
+                masked_t_predicted_scores = self.classifier(masked_t_h)
+                masked_t_predicted_scores = masked_t_predicted_scores.view(-1, self.config.num_classes)
+                
+                masked_a_h = torch.stack((self.utt_private_t, self.utt_private_v, torch.zeros_like(self.utt_private_a), self.utt_shared_t, self.utt_shared_v,  torch.zeros_like(self.utt_shared_a)), dim=0)
+                masked_a_h = self.transformer_encoder(masked_a_h)
+                masked_a_h = torch.cat((masked_a_h[0], masked_a_h[1], masked_a_h[2], masked_a_h[3], masked_a_h[4], masked_a_h[5]), dim=1)
+                masked_a_predicted_scores = self.classifier(masked_a_h)
+                masked_a_predicted_scores = masked_a_predicted_scores.view(-1, self.config.num_classes)
+                
+                masked_v_h = torch.stack((self.utt_private_t, torch.zeros_like(self.utt_private_v), self.utt_private_a, self.utt_shared_t, torch.zeros_like(self.utt_shared_v),  self.utt_shared_a), dim=0)
+                masked_v_h = self.transformer_encoder(masked_v_h)
+                masked_v_h = torch.cat((masked_v_h[0], masked_v_h[1], masked_v_h[2], masked_v_h[3], masked_v_h[4], masked_v_h[5]), dim=1)
+                masked_v_predicted_scores = self.classifier(masked_v_h)
+                masked_v_predicted_scores = masked_v_predicted_scores.view(-1, self.config.num_classes)
+                
+                ce_loss = get_cls_loss(self.config, masked_t_predicted_scores, predicted_scores) +get_cls_loss(self.config, masked_a_predicted_scores, predicted_scores) + get_cls_loss(self.config, masked_v_predicted_scores, predicted_scores)
+                loss += ce_loss
+            elif self.config.use_kt:
                 loss += self.config.kt_weight * kt_loss
+                #for kt_modal_loss in kt_loss:
+                #    loss += kt_loss
         else:
             loss = cls_loss
 
