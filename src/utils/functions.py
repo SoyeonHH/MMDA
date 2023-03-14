@@ -226,7 +226,7 @@ def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=
         loss_v = cosine_similarity_loss(v, t) + cosine_similarity_loss(v, a)
         loss_a = cosine_similarity_loss(a, t) + cosine_similarity_loss(a, v)
 
-        return loss_t + loss_v + loss_a
+        kt_loss = loss_t + loss_v + loss_a
     
     elif config.kt_model == 'Dynamic-tcp':
         loss_t_v = dynamic_weight[0] * cosine_similarity_loss(t, v)
@@ -238,7 +238,9 @@ def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=
         loss_a_t = dynamic_weight[4] * cosine_similarity_loss(a, t)
         loss_a_v = dynamic_weight[5] * cosine_similarity_loss(a, v)
 
-    return (loss_t_v + loss_t_a + loss_v_t + loss_v_a + loss_a_t + loss_a_v)
+        kt_loss = loss_t_v + loss_t_a + loss_v_t + loss_v_a + loss_a_t + loss_a_v
+
+    return kt_loss.squeeze()
 
 
 

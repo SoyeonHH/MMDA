@@ -161,6 +161,9 @@ class Inference(object):
 
     
     def inference_with_confidnet(self):
+        '''
+        confidence score를 fusion 레벨에서 adaptive하게 적용하기 위한 inference
+        '''
         print("Start inference...")
         self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
         self.loss_tcp = nn.MSELoss(reduction="mean")
