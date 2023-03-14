@@ -363,7 +363,12 @@ class MISA(nn.Module):
                 masked_v_predicted_scores = self.classifier(masked_v_h)
                 masked_v_predicted_scores = masked_v_predicted_scores.view(-1, self.config.num_classes)
                 
-                ce_loss = get_cls_loss(self.config, masked_t_predicted_scores, predicted_scores) +get_cls_loss(self.config, masked_a_predicted_scores, predicted_scores) + get_cls_loss(self.config, masked_v_predicted_scores, predicted_scores)
+                t_mask_loss = get_cls_loss(self.config, masked_t_predicted_scores, predicted_scores)
+                a_mask_loss = get_cls_loss(self.config, masked_a_predicted_scores, predicted_scores)
+                v_mask_loss = get_cls_loss(self.config, masked_v_predicted_scores, predicted_scores)
+                
+                h = [loss, t_mask_loss, a_mask_loss, v_mask_loss ]
+                ce_loss = t_mask_loss + a_mask_loss +v_mask_loss
                 loss += ce_loss
             elif self.config.use_kt:
                 loss += self.config.kt_weight * kt_loss
