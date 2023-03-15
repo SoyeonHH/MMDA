@@ -201,7 +201,7 @@ class Solver_DKT_Conf(object):
         print("(Phase 2) Training confidence model...")
 
         best_valid_loss = float('inf')
-        for e in range(self.train_config.n_epochs_conf):
+        for e in range(10):
             train_avg_loss_conf = self.train_tcp()
 
             conf_loss = self.eval_tcp(mode="dev")
