@@ -131,6 +131,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--eval_batch_size', type=int, default=10)
     parser.add_argument('--n_epoch', type=int, default=40)
+    parser.add_argument('--n_epoch_conf', type=int, default=10)
     parser.add_argument('--patience', type=int, default=6)
 
     parser.add_argument('--diff_weight', type=float, default=0.3)   # beta

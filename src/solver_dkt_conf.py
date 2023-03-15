@@ -183,8 +183,16 @@ class Solver_DKT_Conf(object):
                 self.train_config.checkpoint = f'checkpoints/model_{self.train_config.name}.std'
                 
                 curr_patience = patience
+
                 # 임의로 모델 경로 지정 및 저장
                 save_model(self.train_config, self.model, name=self.train_config.model)
+
+                # Print best model results
+                eval_values_best = get_metrics(best_truths, best_results)
+                print("-"*50)
+                print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
+                    best_epoch, valid_loss, eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']))
+                print("-"*50)
             else:
                 curr_patience -= 1
                 if curr_patience <= -1:
@@ -201,7 +209,7 @@ class Solver_DKT_Conf(object):
         print("(Phase 2) Training confidence model...")
 
         best_valid_loss = float('inf')
-        for e in range(10):
+        for e in range(0, self.train_config.n_epoch_conf):
             train_avg_loss_conf = self.train_tcp()
 
             conf_loss = self.eval_tcp(mode="dev")
@@ -234,7 +242,7 @@ class Solver_DKT_Conf(object):
         best_valid_loss = float('inf')
 
         print("(Phase 3) Training the fusion model with dynamic weighted kt...")
-        for e in range(self.train_config.n_epochs):
+        for e in range(0, self.train_config.n_epoch):
             self.model.train()
 
             for para in self.model.parameters():
@@ -244,7 +252,7 @@ class Solver_DKT_Conf(object):
                 para.requires_grad = False
 
             train_loss = []
-            for idx, batch in enumerate(tqdm(self.train_data_loader)):
+            for idx, batch in enumerate(self.train_data_loader):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
                 label_input, label_mask = Solver_DKT_Conf.get_label_input()
@@ -289,7 +297,7 @@ class Solver_DKT_Conf(object):
 
                 
                 # TODO: train the fusion model with dynamic weighted kt
-                loss, y_tilde, predicted_labels, tcp = self.model(t, v, a, l, \
+                loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
                         dynamic_weights=dynamic_weight, training=True)
 
@@ -327,13 +335,15 @@ class Solver_DKT_Conf(object):
                 self.train_config.checkpoint = f'checkpoints/model_{self.train_config.name}.std'
                 
                 curr_patience = patience
+
                 # 임의로 모델 경로 지정 및 저장
                 save_model(self.train_config, self.model, name=self.train_config.model)
+
                 # Print best model results
-                eval_values = get_metrics(best_truths, best_results)
+                eval_values_best = get_metrics(best_truths, best_results)
                 print("-"*50)
                 print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
-                    best_epoch, valid_loss, eval_values['acc'], eval_values['f1'], eval_values['precision'], eval_values['recall']))
+                    best_epoch, valid_loss, eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']))
                 print("-"*50)
 
             else:
@@ -346,6 +356,8 @@ class Solver_DKT_Conf(object):
                     self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
                     lr_scheduler.step()
                     print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
+
+            eval_values = get_metrics(truths, preds)
             
             if self.train_config.eval_mode == "macro":
                 wandb.log(
@@ -546,7 +558,7 @@ class Solver_DKT_Conf(object):
     def eval_tcp(self, mode=None, to_print=False):
         self.model.eval()
         self.confidence_model.eval()
-        eval_loss_conf = []
+        eval_conf_loss = []
         tcp = []
 
         if mode == "dev":
