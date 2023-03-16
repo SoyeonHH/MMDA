@@ -204,6 +204,21 @@ class Solver_DKT_Conf(object):
                     self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
                     self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
                     lr_scheduler.step()
+            
+            eval_values = get_metrics(truths, preds)
+
+            wandb.log(
+                    (
+                        {
+                            "train_loss": train_avg_loss,
+                            "valid_loss": valid_loss,
+                            "test_f_score": eval_values['micro_f1'],
+                            "test_precision": eval_values['micro_precision'],
+                            "test_recall": eval_values['micro_recall'],
+                            "test_acc2": eval_values['acc']
+                        }
+                    )
+                )
 
         ##########################################
         # 2. Train tcp
