@@ -121,6 +121,8 @@ class Solver_DKT_Conf(object):
         ##########################################
 
         print("(Phase 1) Training fusion model")
+        self.train_config.use_kt = False
+
         # total_start = time.time()
         for e in range(self.train_config.n_epoch):
             self.model.train()
@@ -239,6 +241,7 @@ class Solver_DKT_Conf(object):
 
         curr_patience = patience = self.train_config.patience
         num_trials = 1
+        self.train_config.use_kt = True
         best_valid_loss = float('inf')
 
         print("(Phase 3) Training the fusion model with dynamic weighted kt...")
@@ -252,7 +255,7 @@ class Solver_DKT_Conf(object):
                 para.requires_grad = False
 
             train_loss = []
-            for idx, batch in enumerate(self.train_data_loader):
+            for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
                 label_input, label_mask = Solver_DKT_Conf.get_label_input()
@@ -270,7 +273,7 @@ class Solver_DKT_Conf(object):
                 bert_sent_mask = to_gpu(bert_sent_mask)
                 label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-                # TODO: return the tcp for each masked modality
+                # return the tcp for each masked modality
                 _, _, _, z_all = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
                 tcp, _ = self.confidence_model(z_all)
@@ -287,16 +290,19 @@ class Solver_DKT_Conf(object):
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=True)
                 tcp_audio_removed, _ = self.confidence_model(z_audio_removed)
 
-                dynamic_weight = [tcp_text_removed - tcp_video_removed, \
-                                    tcp_text_removed - tcp_audio_removed,\
-                                    tcp_video_removed - tcp_text_removed,\
-                                    tcp_video_removed - tcp_audio_removed,\
-                                    tcp_audio_removed - tcp_text_removed,\
-                                    tcp_audio_removed - tcp_video_removed]
-                dynamic_weight = torch.cat(dynamic_weight, dim=0).to(self.device)
+                dynamic_weight = [torch.sub(tcp_text_removed, tcp_video_removed).tolist(), \
+                                    torch.sub(tcp_text_removed, tcp_audio_removed).tolist(), \
+                                    torch.sub(tcp_video_removed, tcp_text_removed).tolist(), \
+                                    torch.sub(tcp_video_removed, tcp_audio_removed).tolist(), \
+                                    torch.sub(tcp_audio_removed, tcp_text_removed).tolist(), \
+                                    torch.sub(tcp_audio_removed, tcp_video_removed).tolist()]
+                
+                dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).squeeze().to(self.device)
+                # dynamic_weight = torch.permute(dynamic_weight, (1, 0))
+                dynamic_weight = torch.where(dynamic_weight > 0, dynamic_weight, 0.)
 
                 
-                # TODO: train the fusion model with dynamic weighted kt
+                # train the fusion model with dynamic weighted kt
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
                         dynamic_weights=dynamic_weight, training=True)
@@ -368,8 +374,7 @@ class Solver_DKT_Conf(object):
                             "test_f_score": eval_values['f1'],
                             "test_precision": eval_values['precision'],
                             "test_recall": eval_values['recall'],
-                            "test_acc2": eval_values['acc'],
-                            "train_loss_conf": train_avg_loss_conf,
+                            "test_acc2": eval_values['acc']
                         }
                     )
                 )
@@ -382,8 +387,7 @@ class Solver_DKT_Conf(object):
                             "test_f_score": eval_values['micro_f1'],
                             "test_precision": eval_values['micro_precision'],
                             "test_recall": eval_values['micro_recall'],
-                            "test_acc2": eval_values['acc'],
-                            "train_loss_conf": train_avg_loss_conf,
+                            "test_acc2": eval_values['acc']
                         }
                     )
                 )
@@ -396,8 +400,7 @@ class Solver_DKT_Conf(object):
                             "test_f_score": eval_values['weighted_f1'],
                             "test_precision": eval_values['weighted_precision'],
                             "test_recall": eval_values['weighted_recall'],
-                            "test_acc2": eval_values['acc'],
-                            "train_loss_conf": train_avg_loss_conf,
+                            "test_acc2": eval_values['acc']
                         }
                     )
                 )

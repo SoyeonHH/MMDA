@@ -25,6 +25,9 @@ from utils.eval_metrics import *
 import time
 import datetime
 import wandb
+import warnings
+
+warnings.filterwarnings("ignore")
 
 os.chdir(os.getcwd())
 torch.manual_seed(123)
