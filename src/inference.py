@@ -104,7 +104,7 @@ class Inference(object):
 
                 loss, predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 eval_loss.append(loss.item())
                 y_true.append(emo_label.cpu().numpy())
@@ -161,6 +161,7 @@ class Inference(object):
 
     
     def inference_with_confidnet(self):
+        # TODO: Remove modality masking module
         '''
         confidence score를 fusion 레벨에서 adaptive하게 적용하기 위한 inference
         '''
@@ -202,22 +203,22 @@ class Inference(object):
                 # Mutli-Modal Fusion Model
                 loss, predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 # Text Masking Fusion Model
                 _, predicted_scores_t, predicted_labels_t, hidden_state_t = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text",\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
 
                 # Video Masking Fusion Model
                 _, predicted_scores_v, predicted_labels_v, hidden_state_v = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video",\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 # Audio Masking Fusion Model
                 _, predicted_scores_a, predicted_labels_a, hidden_state_a = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,labels=emo_label, masked_modality="audio",\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 
                 emo_label = emo_label.type(torch.float)

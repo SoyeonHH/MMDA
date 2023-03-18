@@ -242,12 +242,12 @@ class Solver_DKT_Conf(object):
 
                 save_model(self.train_config, self.confidence_model, name="confidNet")
 
-            wandb.log(
-                {
-                    "train_loss_conf": train_avg_loss_conf,
-                    "valid_loss_conf": conf_loss
-                }
-            )
+            # wandb.log(
+            #     {
+            #         "train_loss_conf": train_avg_loss_conf,
+            #         "valid_loss_conf": conf_loss
+            #     }
+            # )
 
 
         ##########################################
@@ -260,7 +260,7 @@ class Solver_DKT_Conf(object):
         best_valid_loss = float('inf')
 
         print("(Phase 3) Training the fusion model with dynamic weighted kt...")
-        for e in range(0, self.train_config.n_epoch):
+        for e in range(0, self.train_config.n_epoch_dkt):
             self.model.train()
 
             for para in self.model.parameters():
@@ -447,9 +447,8 @@ class Solver_DKT_Conf(object):
 
         print('='*50)
         print("Test results")
-        test_loss, test_loss_conf, acc, test_preds, test_truths, test_tcp = self.eval(mode="test", to_print=True)
+        test_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         eval_values = get_metrics(test_truths, test_preds)
-        print(f"Test loss: {test_loss}, Test loss conf: {test_loss_conf}")
         print(f"Test accuracy: {eval_values['acc']}")
         print(f"Test f1 score: {eval_values['micro_f1']}")
         print(f"Test precision: {eval_values['micro_precision']}")

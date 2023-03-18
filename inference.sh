@@ -1,1 +1,1 @@
-python src/inference.py --data mosei --eval_mode micro --learning_rate 1e-5 --dropout 0.6 --conf_lr 1e-5 --conf_dropout 0.6 --use_kt True --kt_weight 100.0 --device cuda:1 --batch_size 32 --checkpoint '/home/soyeon/workspace/MMDA/checkpoints/model_2023-03-01_15:13:36.std'
+python src/inference.py --data mosei --eval_mode micro --learning_rate 1e-5 --dropout 0.6 --conf_lr 1e-5 --conf_dropout 0.6 --use_kt True --kt_weight 100.0 --device cuda:1 --batch_size 32 --checkpoint '/home/soyeon/workspace/MMDA/checkpoints/model_2023-03-17_13:08:37.std'
