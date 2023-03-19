@@ -133,7 +133,7 @@ class Inference(object):
         
         # Total results log
         accuracy = get_accuracy(y_true, y_pred)
-        eval_values = get_metrics(y_true, y_pred)
+        eval_values = get_metrics(y_true, y_pred, average=self.config.eval_mode)
 
         print("="*50)
         print("Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, accuracy))
@@ -327,8 +327,8 @@ class Inference(object):
 
         accuracy = get_accuracy(y_true, y_pred)
         dynamic_accuracy = get_accuracy(y_true, y_pred_dynamic)
-        eval_values = get_metrics(y_true, y_pred)
-        dynamic_eval_values = get_metrics(y_true, y_pred_dynamic)
+        eval_values = get_metrics(y_true, y_pred, average=self.config.eval_mode)
+        dynamic_eval_values = get_metrics(y_true, y_pred_dynamic, average=self.config.eval_mode)
 
         print("="*50)
         print("Loss: {:.4f}, Conf Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, eval_conf_loss, accuracy))

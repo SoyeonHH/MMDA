@@ -190,7 +190,7 @@ class Solver_DKT_Conf(object):
                 save_model(self.train_config, self.model, name=self.train_config.model)
 
                 # Print best model results
-                eval_values_best = get_metrics(best_truths, best_results)
+                eval_values_best = get_metrics(best_truths, best_results, average=self.train_config.eval_mode)
                 print("-"*50)
                 print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
                     best_epoch, valid_loss, eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']))
@@ -205,16 +205,16 @@ class Solver_DKT_Conf(object):
                     self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
                     lr_scheduler.step()
             
-            eval_values = get_metrics(truths, preds)
+            eval_values = get_metrics(truths, preds, average=self.train_config.eval_mode)
 
             wandb.log(
                     (
                         {
                             "train_loss": train_avg_loss,
                             "valid_loss": valid_loss,
-                            "test_f_score": eval_values['micro_f1'],
-                            "test_precision": eval_values['micro_precision'],
-                            "test_recall": eval_values['micro_recall'],
+                            "test_f_score": eval_values['f1'],
+                            "test_precision": eval_values['precision'],
+                            "test_recall": eval_values['recall'],
                             "test_acc2": eval_values['acc']
                         }
                     )
@@ -361,7 +361,7 @@ class Solver_DKT_Conf(object):
                 save_model(self.train_config, self.model, name=self.train_config.model)
 
                 # Print best model results
-                eval_values_best = get_metrics(best_truths, best_results)
+                eval_values_best = get_metrics(best_truths, best_results, self.train_config.eval_mode)
                 print("-"*50)
                 print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
                     best_epoch, valid_loss, eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']))
@@ -378,47 +378,20 @@ class Solver_DKT_Conf(object):
                     lr_scheduler.step()
                     print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
 
-            eval_values = get_metrics(truths, preds)
+            eval_values = get_metrics(truths, preds, self.train_config.eval_mode)
             
-            if self.train_config.eval_mode == "macro":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['f1'],
-                            "test_precision": eval_values['precision'],
-                            "test_recall": eval_values['recall'],
-                            "test_acc2": eval_values['acc']
-                        }
-                    )
+            wandb.log(
+                (
+                    {
+                        "train_loss": train_avg_loss,
+                        "valid_loss": valid_loss,
+                        "test_f_score": eval_values['f1'],
+                        "test_precision": eval_values['precision'],
+                        "test_recall": eval_values['recall'],
+                        "test_acc2": eval_values['acc']
+                    }
                 )
-            elif self.train_config.eval_mode == "micro":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['micro_f1'],
-                            "test_precision": eval_values['micro_precision'],
-                            "test_recall": eval_values['micro_recall'],
-                            "test_acc2": eval_values['acc']
-                        }
-                    )
-                )
-            elif self.train_config.eval_mode == "weighted":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['weighted_f1'],
-                            "test_precision": eval_values['weighted_precision'],
-                            "test_recall": eval_values['weighted_recall'],
-                            "test_acc2": eval_values['acc']
-                        }
-                    )
-                )
+            )
 
             # hyperparameter tuning report
             hpt.report_hyperparameter_tuning_metric(
@@ -437,9 +410,9 @@ class Solver_DKT_Conf(object):
         train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
-        eval_values_best = get_metrics(best_truths, best_results)
+        eval_values_best = get_metrics(best_truths, best_results, average=self.train_config.eval_mode)
         best_acc, best_f1, best_precision, best_recall = \
-             eval_values_best['acc'], eval_values_best['micro_f1'], eval_values_best['micro_precision'], eval_values_best['micro_recall']
+             eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']
         print(f'Accuracy: {best_acc}')
         print(f'F1 score: {best_f1}')
         print(f'Precision: {best_precision}')
@@ -448,11 +421,11 @@ class Solver_DKT_Conf(object):
         print('='*50)
         print("Test results")
         test_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
-        eval_values = get_metrics(test_truths, test_preds)
+        eval_values = get_metrics(test_truths, test_preds, average=self.train_config.eval_mode)
         print(f"Test accuracy: {eval_values['acc']}")
-        print(f"Test f1 score: {eval_values['micro_f1']}")
-        print(f"Test precision: {eval_values['micro_precision']}")
-        print(f"Test recall: {eval_values['micro_recall']}")
+        print(f"Test f1 score: {eval_values['f1']}")
+        print(f"Test precision: {eval_values['precision']}")
+        print(f"Test recall: {eval_values['recall']}")
         # total_end = time.time()
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
