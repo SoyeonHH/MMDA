@@ -202,9 +202,9 @@ class Solver(object):
                     {
                         "train_loss": train_avg_loss,
                         "valid_loss": valid_loss,
-                        "test_f_score": eval_values['weighted_f1'],
-                        "test_precision": eval_values['weighted_precision'],
-                        "test_recall": eval_values['weighted_recall'],
+                        "test_f_score": eval_values['f1'],
+                        "test_precision": eval_values['precision'],
+                        "test_recall": eval_values['recall'],
                         "test_acc2": eval_values['acc'],
                     }
                 )

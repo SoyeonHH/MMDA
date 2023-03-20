@@ -79,7 +79,10 @@ def main():
     solver.train()
 
     # Test the model
-    tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
+    if args.kt_model == 'Dynamic-tcp':
+        tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
+    else:
+        tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=None)
     tester.inference()
 
 
