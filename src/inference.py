@@ -80,7 +80,7 @@ class Inference(object):
         y_true, y_pred = [], []
         eval_loss = []
         results = []
-
+        
         with torch.no_grad():
             for batch in tqdm(self.dataloader):
                 self.model.zero_grad()
@@ -110,16 +110,26 @@ class Inference(object):
                 y_true.append(emo_label.cpu().numpy())
                 y_pred.append(predicted_labels.cpu().numpy())
 
-                result["id"] = ids
-                result["input_sentence"] = actual_words
-                result["label"] = emo_label.cpu().numpy()
-                result["prediction"] = predicted_labels.cpu().numpy()
+                #result["id"] = ids
+                #result["input_sentence"] = actual_words
+                #result["label"] = emo_label.cpu().numpy()
+                #result["prediction"] = predicted_labels.cpu().numpy()
+                result["id"] = ids[0]
+                result["input_sentence"] = actual_words[0]
+                result["label"] = emo_label.cpu().numpy()[0]
+                result["prediction"] = predicted_labels.cpu().numpy()[0]
+                result["Original_Loss"] = hidden_state[0][0].item()
+                result["T_Masked_Loss"] = hidden_state[0][1].item()
+                result["V_Masked_Loss"] = hidden_state[0][3].item()
+                result["A_Masked_Loss"] = hidden_state[0][2].item()
+                
+                results.append(result)
 
         eval_loss = np.mean(eval_loss)
         y_true = np.concatenate(y_true, axis=0).squeeze()
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
-        columns = ["id", "input_sentence", "label", "prediction"]
+        columns = ["id", "input_sentence", "label", "prediction", "Original_Loss", "T_Masked_Loss", "V_Masked_Loss","A_Masked_Loss"]
         if self.config.use_kt:
             file_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).csv".format(\
                 self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
