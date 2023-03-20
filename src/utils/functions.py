@@ -239,6 +239,18 @@ def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=
         loss_a_v = torch.mean(dynamic_weight[5] * cosine_similarity_loss(a, v))
 
         kt_loss = loss_t_v + loss_t_a + loss_v_t + loss_v_a + loss_a_t + loss_a_v
+        
+    elif config.kt_model == 'Dynamic-ce':
+        loss_t_v = torch.mean(dynamic_weight[0] * cosine_similarity_loss(t, v))
+        loss_t_a = torch.mean(dynamic_weight[1] * cosine_similarity_loss(t, a))
+        
+        loss_v_t = torch.mean(dynamic_weight[2] * cosine_similarity_loss(v, t))
+        loss_v_a = torch.mean(dynamic_weight[3] * cosine_similarity_loss(v, a))
+
+        loss_a_t = torch.mean(dynamic_weight[4] * cosine_similarity_loss(a, t))
+        loss_a_v = torch.mean(dynamic_weight[5] * cosine_similarity_loss(a, v))
+
+        kt_loss = loss_t_v + loss_t_a + loss_v_t + loss_v_a + loss_a_t + loss_a_v
 
     return kt_loss.squeeze()
 

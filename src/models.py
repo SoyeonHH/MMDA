@@ -330,7 +330,7 @@ class MISA(nn.Module):
         cls_loss = get_cls_loss(self.config, predicted_scores, labels)
         kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
-        cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
+        cmd_loss =       get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
         recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [self.utt_t_orig, self.utt_v_orig, self.utt_a_orig])
 
@@ -345,6 +345,11 @@ class MISA(nn.Module):
                 self.config.sim_weight * similarity_loss + \
                 self.config.recon_weight * recon_loss
             if (self.config.kt_model=="Dynamic-ce"):
+                if self.config.use_cmd_sim:
+                    similarity_f = get_cmd_loss
+                else:
+                    similarity_f = get_domain_loss
+                
                 
                 masked_t_h = torch.stack((torch.zeros_like(self.utt_private_t), self.utt_private_v, self.utt_private_a, torch.zeros_like(self.utt_shared_t), self.utt_shared_v,  self.utt_shared_a), dim=0)
                 masked_t_h = self.transformer_encoder(masked_t_h)
@@ -368,9 +373,24 @@ class MISA(nn.Module):
                 a_mask_loss = get_cls_loss(self.config, masked_a_predicted_scores, predicted_scores)
                 v_mask_loss = get_cls_loss(self.config, masked_v_predicted_scores, predicted_scores)
                 
+                dynamic_weight_list = [0,0,0,0,0,0]
+                if(t_mask_loss > v_mask_loss):
+                    dynamic_weight_list[0] = 1
+                if(t_mask_loss > a_mask_loss):
+                    dynamic_weight_list[1] = 1
+                if(v_mask_loss > t_mask_loss):
+                    dynamic_weight_list[2] = 1
+                if(v_mask_loss > a_mask_loss):
+                    dynamic_weight_list[3] = 1
+                if(a_mask_loss > t_mask_loss):
+                    dynamic_weight_list[4] = 1
+                if(a_mask_loss > v_mask_loss):
+                    dynamic_weight_list[5] = 1
+                
                 h = [loss, t_mask_loss, a_mask_loss, v_mask_loss ]
-                ce_loss = t_mask_loss + a_mask_loss +v_mask_loss
-                loss += ce_loss
+                #ce_loss = t_mask_loss + a_mask_loss +v_mask_loss
+                kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weight_list)
+                loss += kt_loss
             elif self.config.use_kt:
                 loss += self.config.kt_weight * kt_loss
                 #for kt_modal_loss in kt_loss:
