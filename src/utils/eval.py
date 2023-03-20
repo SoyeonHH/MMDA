@@ -30,7 +30,7 @@ def get_accuracy(y, y_pre):
 	acc = round(acc, 4)
 	return acc
 
-def get_metrics(y, y_pre):
+def get_metrics(y, y_pre, average='macro'):
 	"""
 	:param y:1871*6
 	:param y_pre: 1871*6
@@ -44,23 +44,25 @@ def get_metrics(y, y_pre):
 	test_labels = y
 	test_pred = y_pre
 
-	# macro
 	acc = get_accuracy(test_labels, test_pred)
-	macro_f1 = metrics.f1_score(test_labels, test_pred, average='macro')
-	macro_precision = metrics.precision_score(test_labels, test_pred, average='macro')
-	macro_recall = metrics.recall_score(test_labels, test_pred, average='macro')
 
-	# micro
-	micro_f1 = metrics.f1_score(test_labels, test_pred, average='micro')
-	micro_precision = metrics.precision_score(test_labels, test_pred, average='micro')
-	micro_recall = metrics.recall_score(test_labels, test_pred, average='micro')
+	if average == 'macro':
+		# macro
+		f1 = metrics.f1_score(test_labels, test_pred, average='macro')
+		precision = metrics.precision_score(test_labels, test_pred, average='macro')
+		recall = metrics.recall_score(test_labels, test_pred, average='macro')
 
-	# weighted
-	weighted_f1 = metrics.f1_score(test_labels, test_pred, average='weighted')
-	weighted_precision = metrics.precision_score(test_labels, test_pred, average='weighted')
-	weighted_recall = metrics.recall_score(test_labels, test_pred, average='weighted')
+	elif average == 'micro':
+		# micro
+		f1 = metrics.f1_score(test_labels, test_pred, average='micro')
+		precision = metrics.precision_score(test_labels, test_pred, average='micro')
+		recall = metrics.recall_score(test_labels, test_pred, average='micro')
 
-	return {'acc': acc, 'f1': macro_f1, 'precision': macro_precision, 'recall': macro_recall, \
-		'micro_f1': micro_f1, 'micro_precision': micro_precision, 'micro_recall': micro_recall, \
-			'weighted_f1': weighted_f1, 'weighted_precision': weighted_precision, 'weighted_recall': weighted_recall}
+	elif average == 'weighted':
+		# weighted
+		f1 = metrics.f1_score(test_labels, test_pred, average='weighted')
+		precision = metrics.precision_score(test_labels, test_pred, average='weighted')
+		recall = metrics.recall_score(test_labels, test_pred, average='weighted')
+
+	return {'acc': acc, 'f1': f1, 'precision': precision, 'recall': recall}
 	

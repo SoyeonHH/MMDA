@@ -104,7 +104,7 @@ class Inference(object):
 
                 loss, predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 eval_loss.append(loss.item())
                 y_true.append(emo_label.cpu().numpy())
@@ -134,7 +134,7 @@ class Inference(object):
             file_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).csv".format(\
                 self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
         else:
-            file_name = "/resutls_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
+            file_name = "/results_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
         
         with open(os.getcwd() + file_name, "w") as f:
             writer = csv.DictWriter(f, fieldnames=columns)
@@ -143,7 +143,7 @@ class Inference(object):
         
         # Total results log
         accuracy = get_accuracy(y_true, y_pred)
-        eval_values = get_metrics(y_true, y_pred)
+        eval_values = get_metrics(y_true, y_pred, average=self.config.eval_mode)
 
         print("="*50)
         print("Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, accuracy))
@@ -171,6 +171,10 @@ class Inference(object):
 
     
     def inference_with_confidnet(self):
+        # TODO: Remove modality masking module
+        '''
+        confidence score를 fusion 레벨에서 adaptive하게 적용하기 위한 inference
+        '''
         print("Start inference...")
         self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
         self.loss_tcp = nn.MSELoss(reduction="mean")
@@ -209,22 +213,22 @@ class Inference(object):
                 # Mutli-Modal Fusion Model
                 loss, predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 # Text Masking Fusion Model
                 _, predicted_scores_t, predicted_labels_t, hidden_state_t = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text",\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
 
                 # Video Masking Fusion Model
                 _, predicted_scores_v, predicted_labels_v, hidden_state_v = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video",\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 # Audio Masking Fusion Model
                 _, predicted_scores_a, predicted_labels_a, hidden_state_a = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,labels=emo_label, masked_modality="audio",\
-                        text_weight=None, video_weight=None, audio_weight=None, training=False)
+                        dynamic_weights=None, training=False)
                 
                 
                 emo_label = emo_label.type(torch.float)
@@ -333,8 +337,8 @@ class Inference(object):
 
         accuracy = get_accuracy(y_true, y_pred)
         dynamic_accuracy = get_accuracy(y_true, y_pred_dynamic)
-        eval_values = get_metrics(y_true, y_pred)
-        dynamic_eval_values = get_metrics(y_true, y_pred_dynamic)
+        eval_values = get_metrics(y_true, y_pred, average=self.config.eval_mode)
+        dynamic_eval_values = get_metrics(y_true, y_pred_dynamic, average=self.config.eval_mode)
 
         print("="*50)
         print("Loss: {:.4f}, Conf Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, eval_conf_loss, accuracy))
@@ -364,7 +368,7 @@ class Inference(object):
                 self.config.model, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
 
         with open(os.getcwd() + json_name, 'w') as f:
-            json.dump(total_results, f)
+            json.dump(total_results, f, indent=4)
 
 
 

@@ -25,6 +25,9 @@ from utils.eval_metrics import *
 import time
 import datetime
 import wandb
+import warnings
+
+warnings.filterwarnings("ignore")
 
 os.chdir(os.getcwd())
 torch.manual_seed(123)
@@ -76,7 +79,10 @@ def main():
     solver.train()
 
     # Test the model
-    tester = Inference(test_config, test_data_loader, model=solver.model)
+    if args.kt_model == 'Dynamic-tcp':
+        tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
+    else:
+        tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=None)
     tester.inference()
 
 if __name__ == "__main__":

@@ -216,7 +216,7 @@ class MISA(nn.Module):
         return final_h1, final_h2
 
     def forward(self, sentences, visual, acoustic, lengths, bert_sent, bert_sent_type, bert_sent_mask,
-                  labels=None, masked_modality=None, text_weight=None, video_weight=None, audio_weight=None, training=True):
+                  labels=None, masked_modality=None, dynamic_weights=None, training=True):
         """
         visual: (L, B, Dv)
         aucoustic: (L, B, Da)
@@ -297,16 +297,17 @@ class MISA(nn.Module):
             self.utt_private_a = torch.zeros_like(self.utt_private_a)
             self.utt_shared_a = torch.zeros_like(self.utt_shared_a)
         
-        # Confidence-aware weghted fusion
-        if text_weight is not None:
-            self.utt_private_t = self.utt_private_t * text_weight
-            self.utt_shared_t = self.utt_shared_t * text_weight
-        elif video_weight is not None:
-            self.utt_private_v = self.utt_private_v * video_weight
-            self.utt_shared_v = self.utt_shared_v * video_weight
-        elif audio_weight is not None:
-            self.utt_private_a = self.utt_private_a * audio_weight
-            self.utt_shared_a = self.utt_shared_a * audio_weight
+        # Confidence adaptive fusion
+        # TODO: 이거 잘 동작하는지 확인해보기
+        # if text_weight is not None:
+        #     self.utt_private_t = self.utt_private_t * text_weight
+        #     self.utt_shared_t = self.utt_shared_t * text_weight
+        # elif video_weight is not None:
+        #     self.utt_private_v = self.utt_private_v * video_weight
+        #     self.utt_shared_v = self.utt_shared_v * video_weight
+        # elif audio_weight is not None:
+        #     self.utt_private_a = self.utt_private_a * audio_weight
+        #     self.utt_shared_a = self.utt_shared_a * audio_weight
         
         
         # 1-LAYER TRANSFORMER FUSION
@@ -327,7 +328,7 @@ class MISA(nn.Module):
 
 
         cls_loss = get_cls_loss(self.config, predicted_scores, labels)
-        kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels)
+        kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
         cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
