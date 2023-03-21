@@ -9,7 +9,7 @@ import wandb
 from config import get_config, activation_dict
 from data_loader import get_loader
 from solver import Solver
-#from solver_dkt_ce import Solver
+from solver_dkt_conf import Solver_DKT_Conf
 from inference import Inference
 from utils.tools import *
 from transformers import BertTokenizer
@@ -42,7 +42,7 @@ def main():
 
     # Setting training log
     args = get_config()
-    wandb.init(project="multimodal_kt_dist")
+    wandb.init(project="MISA-classification")
     wandb.config.update(args)
 
     # Setting random seed
@@ -67,9 +67,9 @@ def main():
     test_data_loader = get_loader(test_config, shuffle = False)
 
     # Solver is a wrapper for model traiing and testing
-    if args.use_kt == False or args.kt_model == 'Static':
-        solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
-    elif args.kt_model == 'Dynamic-ce':
+    if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
+        solver = Solver_DKT_Conf(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    else:
         solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
 
     # Build the model
@@ -79,7 +79,7 @@ def main():
     solver.train()
 
     # Test the model
-    if args.kt_model == 'Dynamic-tcp':
+    if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
         tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
     else:
         tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=None)
