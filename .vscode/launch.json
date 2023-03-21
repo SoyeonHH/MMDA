@@ -5,6 +5,8 @@
     "version": "0.2.0",
     "configurations": [
 
+
+
         {
             "name": "multimodal_kt_ce",
             "type": "python",
@@ -12,6 +14,15 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args":["--data", "mosei", "--eval_mode", "micro", "--learning_rate", "1e-5", "--dropout", "0.6", "--conf_lr", "1e-5", "--conf_dropout", "0.5", "--use_kt", "True", "--kt_weight", "10.0", "--device", "cuda", "--batch_size", "32", "--kt_model","Dynamic-ce"],
+            "justMyCode": true
+        },
+        {
+            "name": "multimodal_kt_ce_macro",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args":["--data", "mosei", "--eval_mode", "macro", "--learning_rate", "1e-5", "--dropout", "0.6", "--conf_lr", "1e-5", "--conf_dropout", "0.5", "--use_kt", "True", "--kt_weight", "100.0", "--device", "cuda", "--batch_size", "32", "--kt_model","Dynamic-ce", "--n_epoch", "40"],
             "justMyCode": true
         },
         {
