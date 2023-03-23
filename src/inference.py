@@ -114,14 +114,14 @@ class Inference(object):
                 #result["input_sentence"] = actual_words
                 #result["label"] = emo_label.cpu().numpy()
                 #result["prediction"] = predicted_labels.cpu().numpy()
-                result["id"] = ids[0]
-                result["input_sentence"] = actual_words[0]
-                result["label"] = emo_label.cpu().numpy()[0]
-                result["prediction"] = predicted_labels.cpu().numpy()[0]
-                result["Original_Loss"] = hidden_state[0][0].item()
-                result["T_Masked_Loss"] = hidden_state[0][1].item()
-                result["V_Masked_Loss"] = hidden_state[0][3].item()
-                result["A_Masked_Loss"] = hidden_state[0][2].item()
+                # result["id"] = ids[0]
+                # result["input_sentence"] = actual_words[0]
+                # result["label"] = emo_label.cpu().numpy()[0]
+                # result["prediction"] = predicted_labels.cpu().numpy()[0]
+                # result["Original_Loss"] = hidden_state[0][0].item()
+                # result["T_Masked_Loss"] = hidden_state[0][1].item()
+                # result["V_Masked_Loss"] = hidden_state[0][3].item()
+                # result["A_Masked_Loss"] = hidden_state[0][2].item()
                 
                 results.append(result)
 
@@ -129,17 +129,17 @@ class Inference(object):
         y_true = np.concatenate(y_true, axis=0).squeeze()
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
-        columns = ["id", "input_sentence", "label", "prediction", "Original_Loss", "T_Masked_Loss", "V_Masked_Loss","A_Masked_Loss"]
-        if self.config.use_kt:
-            file_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).csv".format(\
-                self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
-        else:
-            file_name = "/results_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
+        # columns = ["id", "input_sentence", "label", "prediction", "Original_Loss", "T_Masked_Loss", "V_Masked_Loss","A_Masked_Loss"]
+        # if self.config.use_kt:
+        #     file_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).csv".format(\
+        #         self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
+        # else:
+        #     file_name = "/results_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
         
-        with open(os.getcwd() + file_name, "w") as f:
-            writer = csv.DictWriter(f, fieldnames=columns)
-            writer.writeheader()
-            writer.writerows(results)
+        # with open(os.getcwd() + file_name, "w") as f:
+        #     writer = csv.DictWriter(f, fieldnames=columns)
+        #     writer.writeheader()
+        #     writer.writerows(results)
         
         # Total results log
         accuracy = get_accuracy(y_true, y_pred)
@@ -401,7 +401,7 @@ def main():
     args = config.get_config()
 
     test_config = config.get_config(mode='test')
-    test_config.batch_size = 1
+    # test_config.batch_size = 1
     test_data_loader = get_loader(test_config, shuffle=False)
 
     tester = Inference(test_config, test_data_loader, checkpoint=args.checkpoint)

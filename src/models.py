@@ -344,12 +344,7 @@ class MISA(nn.Module):
                 self.config.diff_weight * diff_loss + \
                 self.config.sim_weight * similarity_loss + \
                 self.config.recon_weight * recon_loss
-            if (self.config.kt_model=="Dynamic-ce"):
-                if self.config.use_cmd_sim:
-                    similarity_f = get_cmd_loss
-                else:
-                    similarity_f = get_domain_loss
-                
+            if (self.config.kt_model=="Dynamic-ce"):  
                 
                 masked_t_h = torch.stack((torch.zeros_like(self.utt_private_t), self.utt_private_v, self.utt_private_a, torch.zeros_like(self.utt_shared_t), self.utt_shared_v,  self.utt_shared_a), dim=0)
                 masked_t_h = self.transformer_encoder(masked_t_h)
@@ -390,7 +385,7 @@ class MISA(nn.Module):
                 h = [loss, t_mask_loss, a_mask_loss, v_mask_loss ]
                 #ce_loss = t_mask_loss + a_mask_loss +v_mask_loss
                 kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weight_list)
-                loss += kt_loss
+                loss += self.config.kt_weight * kt_loss
             elif self.config.use_kt:
                 loss += self.config.kt_weight * kt_loss
                 #for kt_modal_loss in kt_loss:
