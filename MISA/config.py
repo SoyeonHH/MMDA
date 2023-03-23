@@ -159,7 +159,7 @@ def get_config(parse=True, **optional_kwargs):
 
     # Model
     parser.add_argument('--model', type=str,
-                        default='MISA', help='one of {MISA, TextBert, AudioLSTM, VideoLSTM}')
+                        default='MISA', help='one of {MISA, }')
     parser.add_argument('--conf_lr', type=float, default=1e-5)
     parser.add_argument('--conf_dropout', type=float, default=0.6)
     parser.add_argument('--use_mcp', type=str2bool, default=False)
@@ -167,8 +167,9 @@ def get_config(parse=True, **optional_kwargs):
     
     parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
-                        default='Dynamic-tcp', help='one of {Static, Dynamic-dist, Dynamic-ce}')
+                        default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
     parser.add_argument('--kt_weight', type=float, default=100.0)
+    parser.add_argument('--dynamic_method', type=str, default='subtraction', help='one of {threshold, subtraction}')
 
     # Parse arguments
     if parse:

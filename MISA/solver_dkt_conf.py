@@ -305,16 +305,26 @@ class Solver_DKT_Conf(object):
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=True)
                 tcp_audio_removed, _ = self.confidence_model(z_audio_removed)
 
-                dynamic_weight = [torch.sub(tcp_text_removed, tcp_video_removed).tolist(), \
-                                    torch.sub(tcp_text_removed, tcp_audio_removed).tolist(), \
-                                    torch.sub(tcp_video_removed, tcp_text_removed).tolist(), \
-                                    torch.sub(tcp_video_removed, tcp_audio_removed).tolist(), \
-                                    torch.sub(tcp_audio_removed, tcp_text_removed).tolist(), \
-                                    torch.sub(tcp_audio_removed, tcp_video_removed).tolist()]
+                if self.train_config.dynamic_method == "threshold":
+                    dynamic_weight = [[1 if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+                    dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).squeeze().to(self.device)
                 
-                dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).squeeze().to(self.device)
-                # dynamic_weight = torch.permute(dynamic_weight, (1, 0))
-                dynamic_weight = torch.where(dynamic_weight > 0, dynamic_weight, 0.)
+                elif self.train_config.dynamic_method == "subtraction":
+                    dynamic_weight = [torch.sub(tcp_text_removed, tcp_video_removed).tolist(), \
+                                        torch.sub(tcp_text_removed, tcp_audio_removed).tolist(), \
+                                        torch.sub(tcp_video_removed, tcp_text_removed).tolist(), \
+                                        torch.sub(tcp_video_removed, tcp_audio_removed).tolist(), \
+                                        torch.sub(tcp_audio_removed, tcp_text_removed).tolist(), \
+                                        torch.sub(tcp_audio_removed, tcp_video_removed).tolist()]
+                    
+                    dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).squeeze().to(self.device)
+                    # dynamic_weight = torch.permute(dynamic_weight, (1, 0))
+                    dynamic_weight = torch.where(dynamic_weight > 0, dynamic_weight, 0.)
 
                 
                 # train the fusion model with dynamic weighted kt
