@@ -9,7 +9,8 @@ import wandb
 from config import get_config, activation_dict
 from data_loader import get_loader
 from solver import Solver
-from solver_dkt_conf import Solver_DKT_Conf
+from solver_dkt_tcp import Solver_DKT_TCP
+from solver_dkt_ce import Solver_DKT_CE
 from inference import Inference
 from utils.tools import *
 from transformers import BertTokenizer
@@ -67,8 +68,10 @@ def main():
     test_data_loader = get_loader(test_config, shuffle = False)
 
     # Solver is a wrapper for model traiing and testing
-    if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
-        solver = Solver_DKT_Conf(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    if args.kt_model == 'Dynamic-tcp':
+        solver = Solver_DKT_TCP(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    elif args.kt_model == 'Dynamic-ce':
+        solver = Solver_DKT_CE(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
     else:
         solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
 

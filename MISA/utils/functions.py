@@ -341,3 +341,15 @@ def distillation_loss(output, target, T):
     target = F.softmax(target / T)
     loss = -torch.sum(target * output) / output.size()[0]
     return loss
+
+
+def binary_ce(output1, output2):
+    """
+    Binary Cross Entropy Loss
+    :param output1:
+    :param output2:
+    :return:
+    """
+    loss_bce = nn.BCEWithLogitsLoss(reduction='mean')
+    loss = [loss_bce(output1[i], output2[i]) for i in range(len(output1))]
+    return loss
