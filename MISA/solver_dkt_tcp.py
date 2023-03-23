@@ -309,6 +309,8 @@ class Solver_DKT_TCP(object):
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=False)
                 tcp_audio_removed, _ = self.confidence_model(z_audio_removed)
                 tcp_audio_removed = torch.where(tcp_audio_removed > 0, tcp_audio_removed, 0.)
+                
+                dynamic_weight = []
 
                 if self.train_config.dynamic_method == "threshold":
                     dynamic_weight = [[1 if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
@@ -319,12 +321,12 @@ class Solver_DKT_TCP(object):
                                         [1 if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
                 
                 elif self.train_config.dynamic_method == "ratio":
-                    dynamic_weight = [[tcp_text_removed[i] / tcp_video_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_text_removed[i] / tcp_audio_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_video_removed[i] / tcp_text_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_video_removed[i] / tcp_audio_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_audio_removed[i] / tcp_text_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_audio_removed[i] / tcp_video_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
                     
                 dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
                 

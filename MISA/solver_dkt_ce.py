@@ -171,12 +171,20 @@ class Solver_DKT_CE(object):
                         [0 if a_mask_loss[i] > v_mask_loss[i] else 1 for i in range(len(t_mask_loss))]]
                 
                 elif self.train_config.dynamic_method == "ratio":
+                    # dynamic_weight = [[t_mask_loss[i] / v_mask_loss[i] if t_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [t_mask_loss[i] / a_mask_loss[i] if t_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [v_mask_loss[i] / t_mask_loss[i] if v_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [v_mask_loss[i] / a_mask_loss[i] if v_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [a_mask_loss[i] / t_mask_loss[i] if a_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [a_mask_loss[i] / v_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
+                    
+                    # TODO: Train again with this ratio
                     dynamic_weight = [[t_mask_loss[i] / v_mask_loss[i] if t_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-                        [t_mask_loss[i] / a_mask_loss[i] if t_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-                        [v_mask_loss[i] / t_mask_loss[i] if v_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-                        [v_mask_loss[i] / a_mask_loss[i] if v_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-                        [a_mask_loss[i] / t_mask_loss[i] if a_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-                        [a_mask_loss[i] / v_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
+                        [t_mask_loss[i] if t_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [v_mask_loss[i] if v_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [v_mask_loss[i] if v_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [a_mask_loss[i] if a_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [a_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
 
                 dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
 
