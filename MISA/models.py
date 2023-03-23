@@ -13,7 +13,6 @@ from sklearn.preprocessing import MinMaxScaler
 from utils import to_gpu, to_cpu, DiffLoss, MSE, SIMSE, CMD
 from utils.functions import *
 from utils import ReverseLayerF, getBinaryTensor
-from modules.module_decoder import DecoderModel, DecoderConfig
 
 class EmotionClassifier(nn.Module):
     def __init__(self, input_dims, num_classes, dropout=0.1):
@@ -297,18 +296,6 @@ class MISA(nn.Module):
             self.utt_private_a = torch.zeros_like(self.utt_private_a)
             self.utt_shared_a = torch.zeros_like(self.utt_shared_a)
         
-        # Confidence adaptive fusion
-        # TODO: 이거 잘 동작하는지 확인해보기
-        # if text_weight is not None:
-        #     self.utt_private_t = self.utt_private_t * text_weight
-        #     self.utt_shared_t = self.utt_shared_t * text_weight
-        # elif video_weight is not None:
-        #     self.utt_private_v = self.utt_private_v * video_weight
-        #     self.utt_shared_v = self.utt_shared_v * video_weight
-        # elif audio_weight is not None:
-        #     self.utt_private_a = self.utt_private_a * audio_weight
-        #     self.utt_shared_a = self.utt_shared_a * audio_weight
-        
         
         # 1-LAYER TRANSFORMER FUSION
         h = torch.stack((self.utt_private_t, self.utt_private_v, self.utt_private_a, self.utt_shared_t, self.utt_shared_v,  self.utt_shared_a), dim=0)
@@ -330,7 +317,7 @@ class MISA(nn.Module):
         cls_loss = get_cls_loss(self.config, predicted_scores, labels)
         kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
-        cmd_loss =       get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
+        cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
         recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [self.utt_t_orig, self.utt_v_orig, self.utt_a_orig])
 
@@ -345,12 +332,7 @@ class MISA(nn.Module):
                 self.config.sim_weight * similarity_loss + \
                 self.config.recon_weight * recon_loss
             if (self.config.kt_model=="Dynamic-ce"):
-                if self.config.use_cmd_sim:
-                    similarity_f = get_cmd_loss
-                else:
-                    similarity_f = get_domain_loss
-                
-                
+
                 masked_t_h = torch.stack((torch.zeros_like(self.utt_private_t), self.utt_private_v, self.utt_private_a, torch.zeros_like(self.utt_shared_t), self.utt_shared_v,  self.utt_shared_a), dim=0)
                 masked_t_h = self.transformer_encoder(masked_t_h)
                 masked_t_h = torch.cat((masked_t_h[0], masked_t_h[1], masked_t_h[2], masked_t_h[3], masked_t_h[4], masked_t_h[5]), dim=1)

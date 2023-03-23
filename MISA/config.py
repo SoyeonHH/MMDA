@@ -167,8 +167,9 @@ def get_config(parse=True, **optional_kwargs):
     
     parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
-                        default='Dynamic-tcp', help='one of {Static, Dynamic-dist, Dynamic-ce}')
+                        default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
     parser.add_argument('--kt_weight', type=float, default=100.0)
+    parser.add_argument('--dynamic_method', type=str, default='subtraction', help='one of {threshold, subtraction}')
 
     # Parse arguments
     if parse:
