@@ -152,6 +152,8 @@ class Solver_DKT_TCP(object):
                 bert_sent_mask = to_gpu(bert_sent_mask)
                 label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
+                self.train_config.use_kt = False
+
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
                 # y_tilde = y_tilde.squeeze()
@@ -330,6 +332,12 @@ class Solver_DKT_TCP(object):
                     
                 dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
                 
+                # update kt_loss weight
+                self.train_config.use_kt = True
+                if e / 10 == 0 and e != 0:
+                    self.train_config.kt_weight *= 2
+                    print("================ KT weight: ", self.train_config.kt_weight, " ================")
+
                 # train the fusion model with dynamic weighted kt
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \

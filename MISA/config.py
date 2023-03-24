@@ -129,8 +129,8 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--num_classes', type=int, default=6)   # Fixed to classify
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--eval_batch_size', type=int, default=10)
-    parser.add_argument('--n_epoch', type=int, default=1)
-    parser.add_argument('--n_epoch_conf', type=int, default=1)
+    parser.add_argument('--n_epoch', type=int, default=10)
+    parser.add_argument('--n_epoch_conf', type=int, default=10)
     parser.add_argument('--n_epoch_dkt', type=int, default=30)
     parser.add_argument('--patience', type=int, default=6)
 

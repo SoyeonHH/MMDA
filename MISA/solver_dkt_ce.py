@@ -187,6 +187,11 @@ class Solver_DKT_CE(object):
                         [a_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
 
                 dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
+                
+                # update kt_loss weight
+                if e / 10 == 0 and e != 0:
+                    self.train_config.kt_weight *= 2
+                    print("================ KT weight: ", self.train_config.kt_weight, " ================")
 
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
