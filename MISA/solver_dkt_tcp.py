@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 import config
 from utils.tools import *
 from utils.eval import *
+from utils.functions import *
 import time
 import datetime
 import wandb
@@ -380,6 +381,7 @@ class Solver_DKT_TCP(object):
 
                 # 임의로 모델 경로 지정 및 저장
                 save_model(self.train_config, self.model, name=self.train_config.model)
+                save_model(self.train_config, self.confidence_model, name=self.train_config.model, confidNet=True)
 
                 # Print best model results
                 eval_values_best = get_metrics(best_truths, best_results, self.train_config.eval_mode)
@@ -630,17 +632,9 @@ class Solver_DKT_TCP(object):
     def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
         tcp_loss = 0.0
         mcp_loss = 0.0
-        tcp_batch = []
 
-        for i in range(truth.size(0)):  # for each batch
-            tcp = 0.0
-            for j in range(truth[i].size(0)):   # for each class
-                tcp += pred[i][j] * truth[i][j]
-            tcp = tcp / torch.count_nonzero(truth[i]) if torch.count_nonzero(truth[i]) != 0 else 0.0
-            tcp_batch.append(tcp)
-        
-        tcp_batch = to_gpu(torch.tensor(tcp_batch))
-        tcp_loss = self.loss_tcp(predicted_tcp, tcp_batch)
+        tcp_target = get_tcp_target(truth, pred)
+        tcp_loss = self.loss_tcp(predicted_tcp, tcp_target)
 
         # pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
 

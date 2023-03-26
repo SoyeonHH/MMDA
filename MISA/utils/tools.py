@@ -12,14 +12,33 @@ def save_load_name(args, name=''):
     return name + '_' + args.model
 
 
-def save_model(args, model, name=''):
+def save_model(args, model, name='', confidNet=None):
     if not os.path.exists('pre_trained_models'):
         os.mkdir('pre_trained_models')
-    torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}.pt')
+    
+    if confidNet is not None:
+        torch.save(model.state_dict(), f'pre_trained_models/best_confidNet_{args.data}_{name}.pt')
+        return
+
+    if args.use_kt:
+        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}_kt_{args.kt_model}_{args.kt_weight}.pt')
+    else:
+        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}.pt')
 
 
-def load_model(args, name=''):
-    file = f'pre_trained_models/best_model_{args.data}_{name}.pt'
+def load_model(args, name='', confidNet=None):
+
+    if confidNet is not None:
+        file = f'pre_trained_models/best_confidNet_{args.data}_{name}.pt'
+        with open(file, 'rb') as f:
+            buffer = io.BytesIO(f.read())
+        model = torch.load(buffer)
+        return model
+
+    if args.use_kt:
+        file = f'pre_trained_models/best_model_{args.data}_{name}_kt_{args.kt_model}_{args.kt_weight}.pt'
+    else:
+        file = f'pre_trained_models/best_model_{args.data}_{name}.pt'
     with open(file, 'rb') as f:
         buffer = io.BytesIO(f.read())
     model = torch.load(buffer)
