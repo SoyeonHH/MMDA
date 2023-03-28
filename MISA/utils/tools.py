@@ -12,7 +12,7 @@ def save_load_name(args, name=''):
     return name + '_' + args.model
 
 
-def save_model(args, model, name='', confidNet=None):
+def save_model(args, model, name='', confidNet=None, dynamicKT=None):
     if not os.path.exists('pre_trained_models'):
         os.mkdir('pre_trained_models')
     
@@ -20,10 +20,10 @@ def save_model(args, model, name='', confidNet=None):
         torch.save(model.state_dict(), f'pre_trained_models/best_confidNet_{args.data}_{name}_{args.conf_loss}_epoch({args.n_epoch_conf}).pt')
         return
 
-    if args.use_kt:
+    if dynamicKT is not None:
         torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}_kt_{args.kt_model}_{args.kt_weight}.pt')
     else:
-        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}.pt')
+        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}_baseline.pt')
 
 
 def load_model(args, name='', confidNet=None):

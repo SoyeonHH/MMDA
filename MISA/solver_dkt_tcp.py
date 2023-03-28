@@ -380,7 +380,7 @@ class Solver_DKT_TCP(object):
                 curr_patience = patience
 
                 # 임의로 모델 경로 지정 및 저장
-                save_model(self.train_config, self.model, name=self.train_config.model)
+                save_model(self.train_config, self.model, name=self.train_config.model, dynamicKT=True)
                 save_model(self.train_config, self.confidence_model, name=self.train_config.model, confidNet=True)
 
                 # Print best model results
