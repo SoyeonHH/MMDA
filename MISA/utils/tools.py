@@ -17,7 +17,7 @@ def save_model(args, model, name='', confidNet=None):
         os.mkdir('pre_trained_models')
     
     if confidNet is not None:
-        torch.save(model.state_dict(), f'pre_trained_models/best_confidNet_{args.data}_{name}.pt')
+        torch.save(model.state_dict(), f'pre_trained_models/best_confidNet_{args.data}_{name}_{args.conf_loss}_epoch({args.n_epoch_conf}).pt')
         return
 
     if args.use_kt:
@@ -27,7 +27,6 @@ def save_model(args, model, name='', confidNet=None):
 
 
 def load_model(args, name='', confidNet=None):
-
     if confidNet is not None:
         file = f'pre_trained_models/best_confidNet_{args.data}_{name}.pt'
         with open(file, 'rb') as f:

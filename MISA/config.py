@@ -108,10 +108,11 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train')
     parser.add_argument('--runs', type=int, default=5)
-    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
     parser.add_argument('--checkpoint', type=str, default=None)
+    parser.add_argument('--current_dir', type=str, default='/home/soyeon/workspace/MMDA/MISA')
 
     # Bert
     parser.add_argument('--use_bert', type=str2bool, default=True)
@@ -160,6 +161,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--model', type=str,
                         default='MISA', help='one of {MISA, }')
     parser.add_argument('--use_confidNet', type=str2bool, default=True)
+    parser.add_argument('--conf_loss', type=str, default='mse', help='one of {mse, focal, ranking}')
     parser.add_argument('--conf_lr', type=float, default=1e-5)
     parser.add_argument('--conf_dropout', type=float, default=0.6)
     parser.add_argument('--use_mcp', type=str2bool, default=False)
@@ -168,7 +170,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
                         default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
-    parser.add_argument('--kt_weight', type=float, default=100.0)
+    parser.add_argument('--kt_weight', type=float, default=50000.0)
     parser.add_argument('--dynamic_method', type=str, default='ratio', help='one of {threshold, ratio}')
 
     # Parse arguments

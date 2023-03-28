@@ -246,12 +246,12 @@ class Solver_DKT_TCP(object):
 
                 save_model(self.train_config, self.confidence_model, name="confidNet")
 
-            # wandb.log(
-            #     {
-            #         "train_loss_conf": train_avg_loss_conf,
-            #         "valid_loss_conf": conf_loss
-            #     }
-            # )
+            wandb.log(
+                {
+                    "train_loss_conf": train_avg_loss_conf,
+                    "valid_loss_conf": conf_loss
+                }
+            )
 
 
         ##########################################

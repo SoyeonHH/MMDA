@@ -279,11 +279,12 @@ class Inference(object):
         file_name = "/results_kt-{}({})-dropout({})-confidNet-dropout({})-batchsize({}).csv".format(\
             self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
         
+        # TODO: Debug code
         with open(os.getcwd() + file_name, 'w') as f:
             key_list = list(results.keys())
             writer = csv.writer(f)
             writer.writerow(results.keys())
-            for i in range(len(key_list)):
+            for i in range(len(results["id"])):
                 writer.writerow([results[x][i] for x in key_list])
         
         # Calculate accuracy
