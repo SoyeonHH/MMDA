@@ -168,7 +168,7 @@ class Inference(object):
             json_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
                 self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
         else:
-            json_name = "/results_{}_dropout({})-batchsize({}).json".format(self.config.model, self.config.dropout, self.config.batch_size)
+            json_name = "/results_{}_baseline_dropout({})-batchsize({})_epoch({}).json".format(self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
         
         with open(os.getcwd() + json_name, "w") as f:
             json.dump(total_results, f, indent=4)
