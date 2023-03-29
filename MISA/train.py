@@ -11,6 +11,7 @@ from data_loader import get_loader
 from solver import Solver
 from solver_dkt_tcp import Solver_DKT_TCP
 from solver_dkt_ce import Solver_DKT_CE
+from confidNet import ConfidNet_Trainer
 from inference import Inference
 from utils.tools import *
 from transformers import BertTokenizer
@@ -80,6 +81,9 @@ def main():
 
     # Train the model (test scores will be returned based on dev performance)
     solver.train()
+
+    # confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader, dev_data_loader, test_data_loader)
+    # confidnet_trainer.train()
 
     # Test the model
     if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
