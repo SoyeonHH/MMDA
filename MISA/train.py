@@ -69,9 +69,9 @@ def main():
     test_data_loader = get_loader(test_config, shuffle = False)
 
     # Solver is a wrapper for model traiing and testing
-    if args.kt_model == 'Dynamic-tcp':
+    if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
         solver = Solver_DKT_TCP(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
-    elif args.kt_model == 'Dynamic-ce':
+    elif args.use_kt == True and args.kt_model == 'Dynamic-ce':
         solver = Solver_DKT_CE(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
     else:
         solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)

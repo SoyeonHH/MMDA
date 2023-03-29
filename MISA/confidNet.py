@@ -47,12 +47,13 @@ class ConfidenceRegressionNetwork(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(128, num_classes))
     
-
+        self.sigmoid = nn.Sigmoid()
         
         self.loss_tcp = nn.MSELoss(reduction='mean')
     
     def forward(self, seq_input, targets):
         output = self.mlp(seq_input)
+        output = self.sigmoid(output)
         loss = self.loss_tcp(output, targets)
 
         return loss, output
