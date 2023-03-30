@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 import config
 from utils.tools import *
 from utils.eval import *
+from utils.functions import *
 import time
 import datetime
 import wandb
@@ -117,7 +118,6 @@ class Solver(object):
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -130,7 +130,6 @@ class Solver(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
-                label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
@@ -235,6 +234,123 @@ class Solver(object):
         # total_end = time.time()
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
+
+    
+    def train_DKT(self, model=None, confidnet=None):
+        if model is not None:
+            self.model = model
+
+        curr_patience = patience = self.train_config.patience
+        num_trials = 1
+        
+        best_valid_loss = float('inf')
+        best_train_loss = float('inf')
+        lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.5)
+
+        print("Training the fusion model with dynamic weighted kt...")
+        for e in range(0, self.train_config.n_epoch_dkt):
+            self.model.train()
+
+            for para in confidnet.parameters():
+                para.requires_grad = False
+
+            train_loss = []
+            for idx, batch in enumerate(tqdm(self.train_data_loader)):
+                self.model.zero_grad()
+                _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+
+                # batch_size = t.size(0)
+                t = to_gpu(t)
+                v = to_gpu(v)
+                a = to_gpu(a)
+                y = to_gpu(y)
+                emo_label = to_gpu(emo_label)
+                # l = to_gpu(l)
+                l = to_cpu(l)
+                bert_sent = to_gpu(bert_sent)
+                bert_sent_type = to_gpu(bert_sent_type)
+                bert_sent_mask = to_gpu(bert_sent_mask)
+
+                _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                target_tcp = get_tcp_target(emo_label, outputs)
+
+                _, tcp = confidnet(hidden_state, target_tcp)
+
+                # return the tcp for each maksed modality
+                _, _, _, z_text_removed = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
+                _, tcp_text_removed = confidnet(z_text_removed, target_tcp)
+
+                _, _, _, z_video_removed = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
+                _, tcp_video_removed = confidnet(z_video_removed, target_tcp)
+
+                _, _, _, z_audio_removed = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
+                _, tcp_audio_removed = confidnet(z_audio_removed, target_tcp)
+
+                _, _, _, z_only_text = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
+                _, tcp_only_text = confidnet(z_only_text, target_tcp)
+
+                _, _, _, z_only_video = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
+                _, tcp_only_video = confidnet(z_only_video, target_tcp)
+
+                _, _, _, z_only_audio = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
+                _, tcp_only_audio = confidnet(z_only_audio, target_tcp)
+                
+                dynamic_weight = []
+
+                if self.train_config.dynamic_method == "threshold":
+                    dynamic_weight = [[1 if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+                
+                elif self.train_config.dynamic_method == "ratio":
+                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+                    
+                elif self.train_config.dynamic_method == "noise_level":
+                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))]]
+                    
+                    
+                dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
+                
+                # update kt_loss weight
+                self.train_config.use_kt = True
+                if e / 10 == 0 and e != 0:
+                    self.train_config.kt_weight *= 2
+                    print("================ KT weight: ", self.train_config.kt_weight, " ================")
+
+                # train the fusion model with dynamic weighted kt
+                loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
+                        dynamic_weights=dynamic_weight, training=True)
+
+                loss.backward()
+
+                torch.nn.utils.clip_grad_value_([param for param in self.model.parameters() if param.requires_grad], self.train_config.clip)
+                self.optimizer.step()
+
+                train_loss.append(loss.item())
+            
+            train_avg_loss = round(np.mean(train_loss), 4)
+            print(f"Training loss with KT: {train_avg_loss}")
 
 
     

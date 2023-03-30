@@ -65,7 +65,7 @@ def save_results(args, results, mode=None):
     if not os.path.exists('results'):
         os.mkdir('results')
     
-    file_name = f'/results/{args.data}_{args.model}_confidNet_{args.conf_loss}_epoch({args.n_epoch_conf})_{mode}_results.csv'
+    file_name = f'/results/{args.data}_{args.model}_confidNet_{args.conf_loss}_epoch({args.n_epoch_conf})_{mode}_results_process_all_zero_version.csv'
     
     with open(os.getcwd() + file_name, mode='w') as file:
         writer = csv.DictWriter(file, fieldnames=results[0].keys())

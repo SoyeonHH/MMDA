@@ -365,9 +365,14 @@ def get_tcp_target(y_true, y_pred):
     tcp_target = []
     for i in range(y_true.shape[0]):    # for each batch
         tcp = 0.0
-        for j in range(y_true[i].shape[0]):   # for each class
-            tcp += y_pred[i][j] * y_true[i][j]
-        tcp = tcp / torch.count_nonzero(y_true[i]) if torch.count_nonzero(y_true[i]) != 0 else 0.0
+        for j in range(y_true[i].shape[0]): # for each class
+            if torch.count_nonzero(y_true[i]) != 0:
+                tcp += y_pred[i][j] * y_true[i][j]
+            else:
+                tcp += (1 - y_pred[i][j])
+
+        # tcp = tcp / torch.count_nonzero(y_true[i]) if torch.count_nonzero(y_true[i]) != 0 else 0.0
+        tcp = tcp / torch.count_nonzero(y_true[i]) if torch.count_nonzero(y_true[i]) != 0 else tcp / y_true[i].shape[0]
         tcp_target.append(tcp)
     
     return to_gpu(torch.tensor(tcp_target))

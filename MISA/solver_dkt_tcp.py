@@ -331,6 +331,15 @@ class Solver_DKT_TCP(object):
                                         [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
                                         [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
                     
+                elif self.train_config.dynamic_method == "noise_level":
+                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))]]
+                    
+                    
                 dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
                 
                 # update kt_loss weight

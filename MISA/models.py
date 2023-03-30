@@ -286,15 +286,16 @@ class MISA(nn.Module):
         self.reconstruct()
 
         # Modalilty masking before fusion with zero padding
-        if masked_modality == "text":
-            self.utt_private_t = torch.zeros_like(self.utt_private_t)
-            self.utt_shared_t = torch.zeros_like(self.utt_shared_t)
-        elif masked_modality == "video":
-            self.utt_private_v = torch.zeros_like(self.utt_private_v)
-            self.utt_shared_v = torch.zeros_like(self.utt_shared_v)
-        elif masked_modality == "audio":
-            self.utt_private_a = torch.zeros_like(self.utt_private_a)
-            self.utt_shared_a = torch.zeros_like(self.utt_shared_a)
+        if masked_modality is not None:
+            if "text" in masked_modality:
+                self.utt_private_t = torch.zeros_like(self.utt_private_t)
+                self.utt_shared_t = torch.zeros_like(self.utt_shared_t)
+            if "video" in masked_modality:
+                self.utt_private_v = torch.zeros_like(self.utt_private_v)
+                self.utt_shared_v = torch.zeros_like(self.utt_shared_v)
+            if "audio" in masked_modality:
+                self.utt_private_a = torch.zeros_like(self.utt_private_a)
+                self.utt_shared_a = torch.zeros_like(self.utt_shared_a)
         
         
         # 1-LAYER TRANSFORMER FUSION
