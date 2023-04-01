@@ -80,20 +80,18 @@ def main():
     solver.build()
 
     # Train the model (test scores will be returned based on dev performance)
-    solver.train()
+    try:
+        pre_trained_model = load_model(args, name=args.model)
+    except:
+        pre_trained_model = solver.train()
     
     if args.use_kt == True:
         if args.kt_model == 'Dynamic-tcp':
             confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader, dev_data_loader, test_data_loader)
             trained_confidnet = confidnet_trainer.train()
-        solver.train_DKT(confidnet=trained_confidnet)
-    # confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader, dev_data_loader, test_data_loader)
-    # confidnet_trainer.train()
+        dkt_solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=pre_trained_model)
+        dkt_solver.train_DKT(confidnet=trained_confidnet)
 
-    # Test the model
-    # if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
-    #     tester = Inference(test_config, test_data_loader, model=solver.model, confidence_model=solver.confidence_model)
-    # else:
     tester = Inference(test_config, test_data_loader, model=solver.model)
     tester.inference()
 

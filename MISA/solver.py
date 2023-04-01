@@ -235,10 +235,10 @@ class Solver(object):
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
 
+        return self.model
+
     
-    def train_DKT(self, model=None, confidnet=None):
-        if model is not None:
-            self.model = model
+    def train_DKT(self, confidnet=None):
 
         curr_patience = patience = self.train_config.patience
         num_trials = 1
@@ -351,6 +351,75 @@ class Solver(object):
             
             train_avg_loss = round(np.mean(train_loss), 4)
             print(f"Training loss with KT: {train_avg_loss}")
+
+            ##########################################
+            # model evaluation with dev set
+            ##########################################
+
+            valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
+
+            print("-" * 100)
+            print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
+            print("-" * 100)
+
+
+            print(f"Current patience: {curr_patience}, current trial: {num_trials}.")
+            if valid_loss <= best_valid_loss:
+                best_valid_loss = valid_loss
+                best_results = preds
+                best_truths = truths
+                best_epoch = e
+                print("Found new best model on dev set!")
+                if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
+                torch.save(self.model.state_dict(), f'checkpoints/model_{self.train_config.name}.std')
+                torch.save(self.optimizer.state_dict(), f'checkpoints/optim_{self.train_config.name}.std')
+                self.train_config.checkpoint = f'checkpoints/model_{self.train_config.name}.std'
+                
+                curr_patience = patience
+
+                # 임의로 모델 경로 지정 및 저장
+                save_model(self.train_config, self.model, name=self.train_config.model, dynamicKT=True)
+                save_model(self.train_config, self.confidence_model, name=self.train_config.model, confidNet=True)
+
+                # Print best model results
+                eval_values_best = get_metrics(best_truths, best_results, self.train_config.eval_mode)
+                print("-"*50)
+                print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
+                    best_epoch, valid_loss, eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']))
+                print("-"*50)
+
+            else:
+                curr_patience -= 1
+                if curr_patience <= -1:
+                    print("Running out of patience, loading previous best model.")
+                    num_trials -= 1
+                    curr_patience = patience
+                    self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
+                    self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
+                    lr_scheduler.step()
+                    print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
+
+            eval_values = get_metrics(truths, preds, self.train_config.eval_mode)
+            
+            wandb.log(
+                (
+                    {
+                        "train_loss": train_avg_loss,
+                        "valid_loss": valid_loss,
+                        "test_f_score": eval_values['f1'],
+                        "test_precision": eval_values['precision'],
+                        "test_recall": eval_values['recall'],
+                        "test_acc2": eval_values['acc']
+                    }
+                )
+            )
+
+            # hyperparameter tuning report
+            hpt.report_hyperparameter_tuning_metric(
+                hyperparameter_metric_tag="accuracy",
+                metric_value=eval_values['acc'],
+                global_step=e
+            )
 
 
     

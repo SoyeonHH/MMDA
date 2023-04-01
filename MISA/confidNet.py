@@ -257,9 +257,9 @@ class ConfidNet_Trainer(object):
                             "tcp_VA": tcp_text_removed[idx].item(),
                             "tcp_TA": tcp_video_removed[idx].item(),
                             "tcp_TV": tcp_audio_removed[idx].item(),
-                            "tcp_T": tcp_only_video[idx].item(),
-                            "tcp_V": tcp_only_audio[idx].item(),
-                            "tcp_A": tcp_only_text[idx].item()
+                            "tcp_T": tcp_only_text[idx].item(),
+                            "tcp_V": tcp_only_video[idx].item(),
+                            "tcp_A": tcp_only_audio[idx].item()
                         }
                         eval_results.append(eval_result)
 
