@@ -87,8 +87,14 @@ def main():
     
     if args.use_kt == True:
         if args.kt_model == 'Dynamic-tcp':
+            # Training the confidnet with zero_label_processed version
+            train_data_loader = get_loader(train_config, shuffle = True, zero_label_process=True)
+            dev_data_loader = get_loader(dev_config, shuffle = False, zero_label_process=True)
+            test_data_loader = get_loader(test_config, shuffle = False, zero_label_process=True)
+
             confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader, dev_data_loader, test_data_loader)
             trained_confidnet = confidnet_trainer.train()
+            
         dkt_solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=pre_trained_model)
         dkt_solver.train_DKT(confidnet=trained_confidnet)
 
