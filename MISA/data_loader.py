@@ -6,7 +6,7 @@ from collections import defaultdict
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from transformers import *
 
 from create_dataset import MOSI, MOSEI, UR_FUNNY, PAD, UNK
@@ -16,7 +16,7 @@ bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 
 class MSADataset(Dataset):
-    def __init__(self, config):
+    def __init__(self, config, zero_label_process=False):
 
         ## Fetch dataset
         if "mosi" in str(config.data_dir).lower():
@@ -29,7 +29,7 @@ class MSADataset(Dataset):
             print("Dataset not defined correctly")
             exit()
         
-        self.data, self.word2id, self.pretrained_emb = dataset.get_data(config.mode)
+        self.data, self.word2id, self.pretrained_emb = dataset.get_data(config.mode, zero_label_process)
         self.len = len(self.data)
 
         config.visual_size = self.data[0][0][1].shape[1]
@@ -47,10 +47,10 @@ class MSADataset(Dataset):
 
 
 
-def get_loader(config, shuffle=True):
+def get_loader(config, shuffle=True, zero_label_process=False):
     """Load DataLoader of given DialogDataset"""
 
-    dataset = MSADataset(config)
+    dataset = MSADataset(config, zero_label_process)
     
     print(config.mode)
     config.data_len = len(dataset)

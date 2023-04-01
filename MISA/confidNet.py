@@ -219,32 +219,32 @@ class ConfidNet_Trainer(object):
 
                 eval_losses.append(loss.item())
 
-                # return the tcp for each maksed modality
-                _, _, _, z_text_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
-                _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
-
-                _, _, _, z_video_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
-                _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
-
-                _, _, _, z_audio_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
-                _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
-
-                _, _, _, z_only_text = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
-                _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
-
-                _, _, _, z_only_video = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
-                _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
-
-                _, _, _, z_only_audio = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
-                _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
-
                 if mode == "test":
+                    # return the tcp for each maksed modality
+                    _, _, _, z_text_removed = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
+                    _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
+
+                    _, _, _, z_video_removed = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
+                    _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
+
+                    _, _, _, z_audio_removed = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
+                    _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
+
+                    _, _, _, z_only_text = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
+                    _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
+
+                    _, _, _, z_only_video = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
+                    _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
+
+                    _, _, _, z_only_audio = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
+                    _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
+
                     for idx in range(len(ids)):
                         eval_result = {
                             "id": ids[idx],
@@ -292,9 +292,9 @@ def main():
     print(train_config)
 
     # Creating pytorch dataloaders
-    train_data_loader = get_loader(train_config, shuffle = True)
-    dev_data_loader = get_loader(dev_config, shuffle = False)
-    test_data_loader = get_loader(test_config, shuffle = False)
+    train_data_loader = get_loader(train_config, shuffle = True, zero_label_process=True)
+    dev_data_loader = get_loader(dev_config, shuffle = False, zero_label_process=True)
+    test_data_loader = get_loader(test_config, shuffle = False, zero_label_process=True)
 
     confidence_trainer = ConfidNet_Trainer(train_config, train_data_loader, dev_data_loader, test_data_loader)
     confidence_trainer.train()

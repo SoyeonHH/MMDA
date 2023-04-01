@@ -112,7 +112,6 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--freeze', type=str2bool, default=False)
     parser.add_argument('--checkpoint', type=str, default=None)
-    parser.add_argument('--current_dir', type=str, default='/home/soyeon/workspace/MMDA/MISA')
 
     # Bert
     parser.add_argument('--use_bert', type=str2bool, default=True)
@@ -170,7 +169,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
                         default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
-    parser.add_argument('--kt_weight', type=float, default=50000.0)
+    parser.add_argument('--kt_weight', type=float, default=10000.0)
     parser.add_argument('--dynamic_method', type=str, default='ratio', help='one of {threshold, ratio}')
 
     # Parse arguments
