@@ -221,27 +221,27 @@ class ConfidNet_Trainer(object):
 
                 if mode == "test":
                     # return the tcp for each maksed modality
-                    _, _, _, z_text_removed = self.model(t, v, a, l, \
+                    _, logit_text_removed, _, z_text_removed = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
                     _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
 
-                    _, _, _, z_video_removed = self.model(t, v, a, l, \
+                    _, logit_video_removed, _, z_video_removed = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
                     _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
 
-                    _, _, _, z_audio_removed = self.model(t, v, a, l, \
+                    _, logit_audio_removed, _, z_audio_removed = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
                     _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
 
-                    _, _, _, z_only_text = self.model(t, v, a, l, \
+                    _, logit_only_text, _, z_only_text = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
                     _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
 
-                    _, _, _, z_only_video = self.model(t, v, a, l, \
+                    _, logit_only_video, _, z_only_video = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
                     _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
 
-                    _, _, _, z_only_audio = self.model(t, v, a, l, \
+                    _, logit_only_audio, _, z_only_audio = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
                     _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
 
@@ -253,13 +253,13 @@ class ConfidNet_Trainer(object):
                             "predict": outputs[idx].detach().cpu().numpy(),
                             "confid_loss": loss.item(),
                             "target_tcp": target_tcp[idx].item(),
-                            "tcp_TVA": predicts[idx].item(),
-                            "tcp_VA": tcp_text_removed[idx].item(),
-                            "tcp_TA": tcp_video_removed[idx].item(),
-                            "tcp_TV": tcp_audio_removed[idx].item(),
-                            "tcp_T": tcp_only_text[idx].item(),
-                            "tcp_V": tcp_only_video[idx].item(),
-                            "tcp_A": tcp_only_audio[idx].item()
+                            "pred_tcp": predicts[idx].item(),
+                            "tcp_VA": get_tcp_target(emo_label, logit_text_removed)[idx].item(),
+                            "tcp_TA": get_tcp_target(emo_label, logit_video_removed)[idx].item(),
+                            "tcp_TV": get_tcp_target(emo_label, logit_audio_removed)[idx].item(),
+                            "tcp_T": get_tcp_target(emo_label, logit_only_text)[idx].item(),
+                            "tcp_V": get_tcp_target(emo_label, logit_only_video)[idx].item(),
+                            "tcp_A": get_tcp_target(emo_label, logit_only_audio)[idx].item()
                         }
                         eval_results.append(eval_result)
 
