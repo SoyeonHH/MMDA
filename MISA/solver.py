@@ -360,17 +360,17 @@ class Solver(object):
             bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
         _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
 
-        _, _, _, z_only_text = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
-        _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
+        # _, _, _, z_only_text = self.model(t, v, a, l, \
+        #     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
+        # _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
 
-        _, _, _, z_only_video = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
-        _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
+        # _, _, _, z_only_video = self.model(t, v, a, l, \
+        #     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
+        # _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
 
-        _, _, _, z_only_audio = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
-        _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
+        # _, _, _, z_only_audio = self.model(t, v, a, l, \
+        #     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
+        # _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
         
         dynamic_weight = []
 
