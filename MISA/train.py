@@ -77,6 +77,7 @@ def main():
         pre_trained_model = load_model(args, name=args.model)
     except:
         pre_trained_model = solver.train()
+        pre_trained_model = pre_trained_model.state_dict()
     
     if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
         # Training the confidnet with zero_label_processed version
@@ -89,6 +90,7 @@ def main():
         except:
             confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero)
             trained_confidnet = confidnet_trainer.train()
+            trained_confidnet = trained_confidnet.state_dict()
         
         solver.build(pretrained_model=pre_trained_model, confidnet=trained_confidnet)
         solver.train(additional_training=True)
