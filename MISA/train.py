@@ -74,10 +74,10 @@ def main():
     solver.build()
 
     try:
-        pre_trained_model = load_model(args, name=args.model)
+        model = load_model(args, name=args.model)
     except:
-        pre_trained_model = solver.train()
-        pre_trained_model = pre_trained_model.state_dict()
+        model = solver.train()
+        model = model.state_dict()
     
     if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
         # Training the confidnet with zero_label_processed version
@@ -93,10 +93,11 @@ def main():
             trained_confidnet = trained_confidnet.state_dict()
         
         solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
-        solver_dkt_tcp.build(pretrained_model=pre_trained_model, confidnet=trained_confidnet)
-        solver_dkt_tcp.train(additional_training=True)
+        solver_dkt_tcp.build(pretrained_model=model, confidnet=trained_confidnet)
+        model = solver_dkt_tcp.train(additional_training=True)
+        model = model.state_dict()
 
-    tester = Inference(test_config, test_data_loader, model=solver.model)
+    tester = Inference(test_config, test_data_loader, model=model)
     tester.inference()
 
 if __name__ == "__main__":

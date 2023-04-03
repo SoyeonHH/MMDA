@@ -55,17 +55,15 @@ class Inference(object):
     def __init__(self, config, dataloader, model=None, confidence_model=None, checkpoint=None):
         self.config = config
         self.dataloader = dataloader
-        self.model = model
         self.confidence_model = confidence_model
         self.checkpoint = checkpoint
         self.device = torch.device(config.device)
 
-        if self.model is None:
-            self.model = getattr(models, config.model)(config)
-            if checkpoint:
-                self.model.load_state_dict(torch.load(checkpoint))
-            else:
-                self.model.load_state_dict(load_model(config, name=config.model))
+        self.model = getattr(models, config.model)(config)
+        if model is None:
+            self.model.load_state_dict(load_model(config, name=config.model).state_dict())
+        else:
+            self.model.load_state_dict(model)
         
         self.model = self.model.to(self.device)
 
