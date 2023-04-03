@@ -24,6 +24,7 @@ import config
 from utils.tools import *
 from utils.eval import *
 from utils.functions import *
+from confidNet import ConfidenceRegressionNetwork
 import time
 import datetime
 import wandb
@@ -58,11 +59,14 @@ class Solver(object):
         print(f"current device: {self.device}")
     
     # @time_desc_decorator('Build Graph')
-    def build(self, cuda=True): 
+    def build(self, cuda=True, pretrained_model=None, confidnet=None): 
         if self.model is None:
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
-        # Final list
+        if pretrained_model is not None:
+            self.model.load_state_dict(pretrained_model)
+
+        # Final list 
         for name, param in self.model.named_parameters():
 
             # Bert freezing customizations 
@@ -85,6 +89,15 @@ class Solver(object):
                 self.model.embed.weight.data = self.train_config.pretrained_emb
             self.model.embed.requires_grad = False
         
+        # Initialize ConfidNet model
+        if confidnet is not None:
+            self.confidnet = ConfidenceRegressionNetwork(self.train_config, \
+                input_dims=self.train_config.hidden_size*6, num_classes=1, dropout=self.train_config.conf_dropout)
+            self.confidnet.load_state_dict(confidnet)
+            self.confidnet = self.confidnet.to(self.device)
+            for para in self.confidnet.parameters():
+                para.requires_grad = False
+        
         # # Multi-GPU training setting
         # if torch.cuda.device_count() > 1:
         #     print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -100,7 +113,7 @@ class Solver(object):
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5, verbose=True, min_lr=1e-6)
 
     # @time_desc_decorator('Training Start!')
-    def train(self):
+    def train(self, additional_training=False):
         curr_patience = patience = self.train_config.patience
         num_trials = 1
         
@@ -110,7 +123,14 @@ class Solver(object):
         
         train_losses = []
         # total_start = time.time()
-        for e in range(self.train_config.n_epoch):
+
+        if additional_training:
+            print("Training the fusion model with dynamic weighted kt...")
+            n_epoch = self.train_config.n_epoch_dkt
+        else:
+            n_epoch = self.train_config.n_epoch
+
+        for e in range(n_epoch):
             self.model.train()
 
             train_loss = []
@@ -131,8 +151,19 @@ class Solver(object):
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
 
+                # Dynamic weighted kt
+                if self.train_config.kt_model == "Dynamic-tcp":
+                    dynamic_weight = self.get_dynamic_tcp(batch)
+                elif self.train_config.kt_model == "Dynamic-ce":
+                    # TODO: dynamic ce
+                    # dynamic_weight = self.get_dynamic_ce(batch)
+                    continue
+                else:
+                    dynamic_weight = None
+
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
+                        dynamic_weights=dynamic_weight, training=True)
                 # y_tilde = y_tilde.squeeze()
 
                 loss.backward()
@@ -238,191 +269,6 @@ class Solver(object):
         return self.model
 
     
-    def train_DKT(self, confidnet=None):
-
-        curr_patience = patience = self.train_config.patience
-        num_trials = 1
-        
-        best_valid_loss = float('inf')
-        best_train_loss = float('inf')
-        lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.5)
-
-        print("Training the fusion model with dynamic weighted kt...")
-        for e in range(0, self.train_config.n_epoch_dkt):
-            self.model.train()
-
-            for para in confidnet.parameters():
-                para.requires_grad = False
-
-            train_loss = []
-            for idx, batch in enumerate(tqdm(self.train_data_loader)):
-                self.model.zero_grad()
-                _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-
-                # batch_size = t.size(0)
-                t = to_gpu(t)
-                v = to_gpu(v)
-                a = to_gpu(a)
-                y = to_gpu(y)
-                emo_label = to_gpu(emo_label)
-                # l = to_gpu(l)
-                l = to_cpu(l)
-                bert_sent = to_gpu(bert_sent)
-                bert_sent_type = to_gpu(bert_sent_type)
-                bert_sent_mask = to_gpu(bert_sent_mask)
-
-                _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
-                target_tcp = get_tcp_target(emo_label, outputs)
-
-                _, tcp = confidnet(hidden_state, target_tcp)
-
-                # return the tcp for each maksed modality
-                _, _, _, z_text_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
-                _, tcp_text_removed = confidnet(z_text_removed, target_tcp)
-
-                _, _, _, z_video_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
-                _, tcp_video_removed = confidnet(z_video_removed, target_tcp)
-
-                _, _, _, z_audio_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
-                _, tcp_audio_removed = confidnet(z_audio_removed, target_tcp)
-
-                _, _, _, z_only_text = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
-                _, tcp_only_text = confidnet(z_only_text, target_tcp)
-
-                _, _, _, z_only_video = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
-                _, tcp_only_video = confidnet(z_only_video, target_tcp)
-
-                _, _, _, z_only_audio = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
-                _, tcp_only_audio = confidnet(z_only_audio, target_tcp)
-                
-                dynamic_weight = []
-
-                if self.train_config.dynamic_method == "threshold":
-                    dynamic_weight = [[1 if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [1 if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [1 if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [1 if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [1 if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [1 if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
-                
-                elif self.train_config.dynamic_method == "ratio":
-                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
-                    
-                elif self.train_config.dynamic_method == "noise_level":
-                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
-                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))]]
-                    
-                    
-                dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
-                
-                # update kt_loss weight
-                self.train_config.use_kt = True
-                if e / 10 == 0 and e != 0:
-                    self.train_config.kt_weight *= 2
-                    print("================ KT weight: ", self.train_config.kt_weight, " ================")
-
-                # train the fusion model with dynamic weighted kt
-                loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
-                        dynamic_weights=dynamic_weight, training=True)
-
-                loss.backward()
-
-                torch.nn.utils.clip_grad_value_([param for param in self.model.parameters() if param.requires_grad], self.train_config.clip)
-                self.optimizer.step()
-
-                train_loss.append(loss.item())
-            
-            train_avg_loss = round(np.mean(train_loss), 4)
-            print(f"Training loss with KT: {train_avg_loss}")
-
-            ##########################################
-            # model evaluation with dev set
-            ##########################################
-
-            valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
-
-            print("-" * 100)
-            print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
-            print("-" * 100)
-
-
-            print(f"Current patience: {curr_patience}, current trial: {num_trials}.")
-            if valid_loss <= best_valid_loss:
-                best_valid_loss = valid_loss
-                best_results = preds
-                best_truths = truths
-                best_epoch = e
-                print("Found new best model on dev set!")
-                if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
-                torch.save(self.model.state_dict(), f'checkpoints/model_{self.train_config.name}.std')
-                torch.save(self.optimizer.state_dict(), f'checkpoints/optim_{self.train_config.name}.std')
-                self.train_config.checkpoint = f'checkpoints/model_{self.train_config.name}.std'
-                
-                curr_patience = patience
-
-                # 임의로 모델 경로 지정 및 저장
-                save_model(self.train_config, self.model, name=self.train_config.model, dynamicKT=True)
-                save_model(self.train_config, self.confidence_model, name=self.train_config.model, confidNet=True)
-
-                # Print best model results
-                eval_values_best = get_metrics(best_truths, best_results, self.train_config.eval_mode)
-                print("-"*50)
-                print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
-                    best_epoch, valid_loss, eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']))
-                print("-"*50)
-
-            else:
-                curr_patience -= 1
-                if curr_patience <= -1:
-                    print("Running out of patience, loading previous best model.")
-                    num_trials -= 1
-                    curr_patience = patience
-                    self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
-                    self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
-                    lr_scheduler.step()
-                    print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
-
-            eval_values = get_metrics(truths, preds, self.train_config.eval_mode)
-            
-            wandb.log(
-                (
-                    {
-                        "train_loss": train_avg_loss,
-                        "valid_loss": valid_loss,
-                        "test_f_score": eval_values['f1'],
-                        "test_precision": eval_values['precision'],
-                        "test_recall": eval_values['recall'],
-                        "test_acc2": eval_values['acc']
-                    }
-                )
-            )
-
-            # hyperparameter tuning report
-            hpt.report_hyperparameter_tuning_metric(
-                hyperparameter_metric_tag="accuracy",
-                metric_value=eval_values['acc'],
-                global_step=e
-            )
-
-
-    
     def eval(self,mode=None, to_print=False):
         assert(mode is not None)
         self.model.eval()
@@ -491,3 +337,87 @@ class Solver(object):
         labels_mask = torch.from_numpy(labels_mask)
 
         return labels_embedding, labels_mask
+    
+
+    def get_dynamic_tcp(self, batch):
+        _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+
+        t = to_gpu(t)
+        v = to_gpu(v)
+        a = to_gpu(a)
+        y = to_gpu(y)
+        emo_label = to_gpu(emo_label)
+        # l = to_gpu(l)
+        l = to_cpu(l)
+        bert_sent = to_gpu(bert_sent)
+        bert_sent_type = to_gpu(bert_sent_type)
+        bert_sent_mask = to_gpu(bert_sent_mask)
+
+        _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
+            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+        target_tcp = get_tcp_target(emo_label, outputs)
+
+        _, tcp = self.confidnet(hidden_state, target_tcp)
+
+        # return the tcp for each maksed modality
+        _, _, _, z_text_removed = self.model(t, v, a, l, \
+            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
+        _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
+
+        _, _, _, z_video_removed = self.model(t, v, a, l, \
+            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
+        _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
+
+        _, _, _, z_audio_removed = self.model(t, v, a, l, \
+            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
+        _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
+
+        _, _, _, z_only_text = self.model(t, v, a, l, \
+            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
+        _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
+
+        _, _, _, z_only_video = self.model(t, v, a, l, \
+            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
+        _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
+
+        _, _, _, z_only_audio = self.model(t, v, a, l, \
+            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
+        _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
+        
+        dynamic_weight = []
+
+        if self.train_config.dynamic_method == "threshold":
+            dynamic_weight = [[1 if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [1 if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [1 if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [1 if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [1 if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [1 if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+        
+        elif self.train_config.dynamic_method == "ratio":
+            dynamic_weight = [[torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_text_removed[i] - tcp_video_removed[i]) for i in range(len(tcp_text_removed))], \
+                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_text_removed[i] - tcp_audio_removed[i]) for i in range(len(tcp_text_removed))], \
+                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_video_removed[i] - tcp_text_removed[i]) for i in range(len(tcp_text_removed))], \
+                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_video_removed[i] - tcp_audio_removed[i]) for i in range(len(tcp_text_removed))], \
+                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_audio_removed[i] - tcp_text_removed[i]) for i in range(len(tcp_text_removed))], \
+                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_audio_removed[i] - tcp_video_removed[i]) for i in range(len(tcp_text_removed))]]
+
+            # dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+            #                     [tcp_text_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+            #                     [tcp_video_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+            #                     [tcp_video_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+            #                     [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+            #                     [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+            
+        elif self.train_config.dynamic_method == "noise_level":
+            dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))]]
+            
+            
+        dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
+
+        return dynamic_weight

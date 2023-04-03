@@ -97,6 +97,7 @@ class ConfidNet_Trainer(object):
         
 
     def train(self):
+        print("Training Confidence Network...")
         self.build()
         self.confidnet.train()
         train_results = []

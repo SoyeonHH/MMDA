@@ -29,7 +29,7 @@ def save_model(args, model, name='', confidNet=None, dynamicKT=None):
 
 def load_model(args, name='', confidNet=None, dynamic_KT=None):
     if confidNet is not None:
-        file = f'pre_trained_models/best_confidNet_{args.data}_{name}({args.n_epoch}epochs)_{args.conf_loss}_epoch({args.n_epoch_conf}).pt.pt'
+        file = f'pre_trained_models/best_confidNet_{args.data}_{name}({args.n_epoch}epochs)_{args.conf_loss}_epoch({args.n_epoch_conf}).pt'
         with open(file, 'rb') as f:
             buffer = io.BytesIO(f.read())
         model = torch.load(buffer)

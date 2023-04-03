@@ -68,35 +68,30 @@ def main():
     dev_data_loader = get_loader(dev_config, shuffle = False)
     test_data_loader = get_loader(test_config, shuffle = False)
 
-    # Solver is a wrapper for model traiing and testing
-    # if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
-    #     solver = Solver_DKT_TCP(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
-    # elif args.use_kt == True and args.kt_model == 'Dynamic-ce':
-    #     solver = Solver_DKT_CE(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
-    # else:
     solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
 
     # Build the model
     solver.build()
 
-    # Train the model (test scores will be returned based on dev performance)
     try:
         pre_trained_model = load_model(args, name=args.model)
     except:
         pre_trained_model = solver.train()
     
-    if args.use_kt == True:
-        if args.kt_model == 'Dynamic-tcp':
-            # Training the confidnet with zero_label_processed version
-            train_data_loader = get_loader(train_config, shuffle = True, zero_label_process=True)
-            dev_data_loader = get_loader(dev_config, shuffle = False, zero_label_process=True)
-            test_data_loader = get_loader(test_config, shuffle = False, zero_label_process=True)
+    if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
+        # Training the confidnet with zero_label_processed version
+        train_data_loader_nonzero = get_loader(train_config, shuffle = True, zero_label_process=True)
+        dev_data_loader_nonzero = get_loader(dev_config, shuffle = False, zero_label_process=True)
+        test_data_loader_nonzero = get_loader(test_config, shuffle = False, zero_label_process=True)
 
-            confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader, dev_data_loader, test_data_loader)
+        try:
+            trained_confidnet = load_model(args, name=args.model, confidNet=True)
+        except:
+            confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero)
             trained_confidnet = confidnet_trainer.train()
-            
-        dkt_solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=pre_trained_model)
-        dkt_solver.train_DKT(confidnet=trained_confidnet)
+        
+        solver.build(pretrained_model=pre_trained_model, confidnet=trained_confidnet)
+        solver.train(additional_training=True)
 
     tester = Inference(test_config, test_data_loader, model=solver.model)
     tester.inference()

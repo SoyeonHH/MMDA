@@ -249,10 +249,10 @@ class MOSEI:
 
         # If cached data if already exists
         try:
-        # data = load_pickle(DATA_PATH + '/mosei.pkl')
-        # self.train = data['train']
-        # self.dev = data['dev']
-        # self.test = data['test']
+            # data = load_pickle(DATA_PATH + '/mosei.pkl')
+            # self.train = data['train']
+            # self.dev = data['dev']
+            # self.test = data['test']
             self.train = load_pickle(DATA_PATH + '/train.pkl')
             self.dev = load_pickle(DATA_PATH + '/dev.pkl')
             self.test = load_pickle(DATA_PATH + '/test.pkl')
@@ -396,16 +396,16 @@ class MOSEI:
 
             print(f"Total number of {num_drop} datapoints have been dropped.")
 
+            # Save pickles
+            to_pickle(train, DATA_PATH + '/train.pkl')
+            to_pickle(dev, DATA_PATH + '/dev.pkl')
+            to_pickle(test, DATA_PATH + '/test.pkl')
+
             word2id.default_factory = return_unk
 
             # Save glove embeddings cache too
             self.pretrained_emb = pretrained_emb = load_emb(word2id, config.word_emb_path)
             torch.save((pretrained_emb, word2id), CACHE_PATH)
-
-            # Save pickles
-            to_pickle(train, DATA_PATH + '/train.pkl')
-            to_pickle(dev, DATA_PATH + '/dev.pkl')
-            to_pickle(test, DATA_PATH + '/test.pkl')
 
     def get_data(self, mode, zero_label_process=False):
 

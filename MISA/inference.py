@@ -83,8 +83,9 @@ class Inference(object):
         self.model.eval()
 
         y_true, y_pred = [], []
+        pred_tv, pred_ta, pred_va, pred_t, pred_v, pred_a = [], [], [], [], [], []
         eval_loss = []
-        results = []
+        results = defaultdict(list)
         
         with torch.no_grad():
             for batch in tqdm(self.dataloader):
@@ -115,10 +116,46 @@ class Inference(object):
                 y_true.append(emo_label.cpu().numpy())
                 y_pred.append(predicted_labels.cpu().numpy())
 
-                #result["id"] = ids
-                #result["input_sentence"] = actual_words
-                #result["label"] = emo_label.cpu().numpy()
-                #result["prediction"] = predicted_labels.cpu().numpy()
+                # return the results for each masked modality
+                _, logit_text_removed, pred_text_removed, z_text_removed = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
+                
+                _, logit_visual_removed, pred_visual_removed, z_visual_removed = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
+                
+                _, logit_audio_removed, pred_audio_removed, z_audio_removed = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
+                
+                _, logit_only_text, pred_only_text, z_only_text = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
+                
+                _, logit_only_visual, pred_only_visual, z_only_visual = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
+                
+                _, logit_only_audio, pred_only_audio, z_only_audio = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
+                
+                pred_tv.append(pred_audio_removed.cpu().numpy())
+                pred_ta.append(pred_visual_removed.cpu().numpy())
+                pred_va.append(pred_text_removed.cpu().numpy())
+                pred_t.append(pred_only_text.cpu().numpy())
+                pred_v.append(pred_only_visual.cpu().numpy())
+                pred_a.append(pred_only_audio.cpu().numpy())
+
+                results["id"].extend(ids)
+                results["input_sentence"].extend(actual_words)
+                results["label"].extend(emo_label.detach().cpu().numpy())
+                results["prediction"].extend(predicted_labels.detach().cpu().numpy())
+                results["predicted_scores"].extend(predicted_scores.detach().cpu().numpy())
+                results["tcp_TVA"].extend(get_tcp_target(emo_label, predicted_scores).detach().cpu().numpy())
+                results["tcp_AV"].extend(get_tcp_target(emo_label, logit_text_removed).detach().cpu().numpy())
+                results["tcp_TA"].extend(get_tcp_target(emo_label, logit_visual_removed).detach().cpu().numpy())
+                results["tcp_TV"].extend(get_tcp_target(emo_label, logit_audio_removed).detach().cpu().numpy())
+                results["tcp_T"].extend(get_tcp_target(emo_label, logit_only_visual).detach().cpu().numpy())
+                results["tcp_V"].extend(get_tcp_target(emo_label, logit_only_audio).detach().cpu().numpy())
+                results["tcp_A"].extend(get_tcp_target(emo_label, logit_only_text).detach().cpu().numpy())
+
+
                 # result["id"] = ids[0]
                 # result["input_sentence"] = actual_words[0]
                 # result["label"] = emo_label.cpu().numpy()[0]
@@ -128,11 +165,12 @@ class Inference(object):
                 # result["V_Masked_Loss"] = hidden_state[0][3].item()
                 # result["A_Masked_Loss"] = hidden_state[0][2].item()
                 
-                results.append(result)
-
         eval_loss = np.mean(eval_loss)
         y_true = np.concatenate(y_true, axis=0).squeeze()
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
+
+        csv_file_name = os.getcwd() + "/results_{}_{}_dropout({})-batchsize({}).csv".format(\
+            self.config.data, self.config.model, self.config.dropout, self.config.batch_size)
 
         # columns = ["id", "input_sentence", "label", "prediction", "Original_Loss", "T_Masked_Loss", "V_Masked_Loss","A_Masked_Loss"]
         # if self.config.use_kt:
@@ -141,10 +179,12 @@ class Inference(object):
         # else:
         #     file_name = "/results_{}_dropout({})-batchsize({}).csv".format(self.config.model, self.config.dropout, self.config.batch_size)
         
-        # with open(os.getcwd() + file_name, "w") as f:
-        #     writer = csv.DictWriter(f, fieldnames=columns)
-        #     writer.writeheader()
-        #     writer.writerows(results)
+        with open(csv_file_name, 'w') as f:
+            key_list = list(results.keys())
+            writer = csv.writer(f)
+            writer.writerow(results.keys())
+            for i in range(len(results["id"])):
+                writer.writerow([results[x][i] for x in key_list])
         
         # Total results log
         accuracy = get_accuracy(y_true, y_pred)
@@ -155,13 +195,28 @@ class Inference(object):
         print("Precision: {:.4f}, Recall: {:.4f}, F1: {:.4f}".format(eval_values['precision'], eval_values['recall'], eval_values['f1']))
         print("="*50)
 
+        acc_list = [
+            get_accuracy(y_true, np.concatenate(pred_va, axis=0).squeeze()),
+            get_accuracy(y_true, np.concatenate(pred_ta, axis=0).squeeze()),
+            get_accuracy(y_true, np.concatenate(pred_tv, axis=0).squeeze()),
+            get_accuracy(y_true, np.concatenate(pred_t, axis=0).squeeze()),
+            get_accuracy(y_true, np.concatenate(pred_v, axis=0).squeeze()),
+            get_accuracy(y_true, np.concatenate(pred_a, axis=0).squeeze())
+        ]
+
         # Save metric results into json
         total_results = {
             "loss": eval_loss,
             "accuracy": accuracy,
             "precision": eval_values['precision'],
             "recall": eval_values['recall'],
-            "f1": eval_values['f1']
+            "f1": eval_values['f1'],
+            "acc_va": acc_list[0],
+            "acc_ta": acc_list[1],
+            "acc_tv": acc_list[2],
+            "acc_t": acc_list[3],
+            "acc_v": acc_list[4],
+            "acc_a": acc_list[5]
         }
 
         if self.config.use_kt:
