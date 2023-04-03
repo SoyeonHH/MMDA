@@ -152,7 +152,7 @@ class Solver(object):
                 bert_sent_mask = to_gpu(bert_sent_mask)
 
                 # Dynamic weighted kt
-                if self.train_config.kt_model == "Dynamic-tcp":
+                if self.train_config.kt_model == "Dynamic-tcp" and additional_training:
                     dynamic_weight = self.get_dynamic_tcp(batch)
                 elif self.train_config.kt_model == "Dynamic-ce":
                     # TODO: dynamic ce

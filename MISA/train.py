@@ -92,8 +92,9 @@ def main():
             trained_confidnet = confidnet_trainer.train()
             trained_confidnet = trained_confidnet.state_dict()
         
-        solver.build(pretrained_model=pre_trained_model, confidnet=trained_confidnet)
-        solver.train(additional_training=True)
+        solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+        solver_dkt_tcp.build(pretrained_model=pre_trained_model, confidnet=trained_confidnet)
+        solver_dkt_tcp.train(additional_training=True)
 
     tester = Inference(test_config, test_data_loader, model=solver.model)
     tester.inference()
