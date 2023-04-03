@@ -153,7 +153,7 @@ class Solver(object):
 
                 # Dynamic weighted kt
                 if self.train_config.kt_model == "Dynamic-tcp" and additional_training:
-                    dynamic_weight = self.get_dynamic_tcp(batch)
+                    dynamic_weight = self.get_dynamic_tcp(t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask)
                 elif self.train_config.kt_model == "Dynamic-ce":
                     # TODO: dynamic ce
                     # dynamic_weight = self.get_dynamic_ce(batch)
@@ -339,19 +339,7 @@ class Solver(object):
         return labels_embedding, labels_mask
     
 
-    def get_dynamic_tcp(self, batch):
-        _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-
-        t = to_gpu(t)
-        v = to_gpu(v)
-        a = to_gpu(a)
-        y = to_gpu(y)
-        emo_label = to_gpu(emo_label)
-        # l = to_gpu(l)
-        l = to_cpu(l)
-        bert_sent = to_gpu(bert_sent)
-        bert_sent_type = to_gpu(bert_sent_type)
-        bert_sent_mask = to_gpu(bert_sent_mask)
+    def get_dynamic_tcp(self, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask):
 
         _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
             bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
