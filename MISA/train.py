@@ -73,10 +73,10 @@ def main():
     # Build the model
     solver.build()
 
-    # try:
-    #     model = load_model(args, name=args.model)
-    # except:
-    model = solver.train()
+    try:
+        model = load_model(args, name=args.model)
+    except:
+        model = solver.train()
 
     tester = Inference(test_config, test_data_loader, model=model)
     tester.inference()

@@ -88,6 +88,9 @@ class Inference(object):
         pred_tv, pred_ta, pred_va, pred_t, pred_v, pred_a = [], [], [], [], [], []
         eval_loss = []
         results = defaultdict(list)
+
+        if not os.path.exists('results'):
+            os.mkdir('results')
         
         with torch.no_grad():
             for batch in tqdm(self.dataloader):
@@ -172,10 +175,10 @@ class Inference(object):
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
         if self.dkt:
-            csv_file_name = os.getcwd() + "/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({}).csv".format(\
+            csv_file_name = os.getcwd() + "/results/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({}).csv".format(\
             self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
         else:
-            csv_file_name = os.getcwd() + "/results_{}_{}_dropout({})_batchsize({})_epoch({}).csv".format(\
+            csv_file_name = os.getcwd() + "/results/results_{}_{}_dropout({})_batchsize({})_epoch({}).csv".format(\
                 self.config.data, self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
 
         # columns = ["id", "input_sentence", "label", "prediction", "Original_Loss", "T_Masked_Loss", "V_Masked_Loss","A_Masked_Loss"]
@@ -226,10 +229,10 @@ class Inference(object):
         }
 
         if self.dkt:
-            json_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
+            json_name = "/results/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
                 self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
         else:
-            json_name = "/results_{}_baseline_dropout({})-batchsize({})_epoch({}).json".format(self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
+            json_name = "/results/results_{}_baseline_dropout({})-batchsize({})_epoch({}).json".format(self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
         
         with open(os.getcwd() + json_name, "w") as f:
             json.dump(total_results, f, indent=4)
