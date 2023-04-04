@@ -4,29 +4,26 @@ import math
 from pyexpat import model
 import numpy as np
 from random import random
+import time
+import datetime
 import wandb
+from transformers import BertTokenizer
 
 from config import get_config, activation_dict
 from data_loader import get_loader
 from solver import Solver
-from solver_dkt_tcp import Solver_DKT_TCP
-from solver_dkt_ce import Solver_DKT_CE
 from confidNet import ConfidNet_Trainer
 from inference import Inference
 from utils.tools import *
-from transformers import BertTokenizer
+from utils.eval_metrics import *
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
-import config
-from utils.tools import *
-from utils.eval_metrics import *
-import time
-import datetime
-import wandb
+
+
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -76,7 +73,8 @@ def main():
     try:
         model = load_model(args, name=args.model)
     except:
-        model = solver.train()
+        solver.train()
+        model = solver.model.state_dict()
 
     tester = Inference(test_config, test_data_loader, model=model)
     tester.inference()

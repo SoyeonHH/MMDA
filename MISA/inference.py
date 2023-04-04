@@ -52,7 +52,7 @@ import models
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 class Inference(object):
-    def __init__(self, config, dataloader, model=None, confidence_model=None, checkpoint=None, dkt=False):
+    def __init__(self, config, dataloader, model=None, loaded_model=None, confidence_model=None, checkpoint=None, dkt=False):
         self.config = config
         self.dataloader = dataloader
         self.confidence_model = confidence_model
@@ -67,9 +67,10 @@ class Inference(object):
             else:
                 self.model.load_state_dict(load_model(config, name=config.model))
         else:
-            self.model = model
-        
+            self.model.load_state_dict(model)
+            
         self.model = self.model.to(self.device)
+        
 
         if self.confidence_model is None and config.use_confidNet:
             self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.config, self.config.hidden_size*6, \
