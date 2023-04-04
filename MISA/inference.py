@@ -174,9 +174,9 @@ class Inference(object):
         if self.dkt:
             csv_file_name = os.getcwd() + "/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({}).csv".format(\
             self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
-
-        csv_file_name = os.getcwd() + "/results_{}_{}_dropout({})_batchsize({})_epoch({}).csv".format(\
-            self.config.data, self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
+        else:
+            csv_file_name = os.getcwd() + "/results_{}_{}_dropout({})_batchsize({})_epoch({}).csv".format(\
+                self.config.data, self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
 
         # columns = ["id", "input_sentence", "label", "prediction", "Original_Loss", "T_Masked_Loss", "V_Masked_Loss","A_Masked_Loss"]
         # if self.config.use_kt:
