@@ -73,11 +73,13 @@ def main():
     # Build the model
     solver.build()
 
-    try:
-        model = load_model(args, name=args.model)
-    except:
-        model = solver.train()
-        model = model.state_dict()
+    # try:
+    #     model = load_model(args, name=args.model)
+    # except:
+    model = solver.train()
+
+    tester = Inference(test_config, test_data_loader, model=model)
+    tester.inference()
     
     if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
         # Training the confidnet with zero_label_processed version
@@ -97,8 +99,8 @@ def main():
         model = solver_dkt_tcp.train(additional_training=True)
         model = model.state_dict()
 
-    tester = Inference(test_config, test_data_loader, model=model)
-    tester.inference()
+        tester = Inference(test_config, test_data_loader, model=model, dkt=True)
+        tester.inference()
 
 if __name__ == "__main__":
     main()

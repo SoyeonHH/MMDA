@@ -52,16 +52,20 @@ import models
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 class Inference(object):
-    def __init__(self, config, dataloader, model=None, confidence_model=None, checkpoint=None):
+    def __init__(self, config, dataloader, model=None, confidence_model=None, checkpoint=None, dkt=False):
         self.config = config
         self.dataloader = dataloader
         self.confidence_model = confidence_model
         self.checkpoint = checkpoint
+        self.dkt = dkt
         self.device = torch.device(config.device)
 
         self.model = getattr(models, config.model)(config)
         if model is None:
-            self.model.load_state_dict(load_model(config, name=config.model).state_dict())
+            if dkt:
+                self.model.load_state_dict(load_model(config, name=config.model, dynamicKT=True))
+            else:
+                self.model.load_state_dict(load_model(config, name=config.model))
         else:
             self.model.load_state_dict(model)
         
@@ -167,6 +171,10 @@ class Inference(object):
         y_true = np.concatenate(y_true, axis=0).squeeze()
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
+        if self.dkt:
+            csv_file_name = os.getcwd() + "/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({}).csv".format(\
+            self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
+
         csv_file_name = os.getcwd() + "/results_{}_{}_dropout({})_batchsize({})_epoch({}).csv".format(\
             self.config.data, self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
 
@@ -217,7 +225,7 @@ class Inference(object):
             "acc_a": acc_list[5]
         }
 
-        if self.config.use_kt:
+        if self.dkt:
             json_name = "/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
                 self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
         else:
@@ -397,12 +405,12 @@ def main():
     # test_config.batch_size = 1
     test_data_loader = get_loader(test_config, shuffle=False)
 
-    tester = Inference(test_config, test_data_loader, checkpoint=args.checkpoint)
+    tester = Inference(test_config, test_data_loader, dkt=True)
 
-    if test_config.use_confidNet:
-        tester.inference_with_confidnet()
-    else:
-        tester.inference()
+    # if test_config.use_confidNet:
+    #     tester.inference_with_confidnet()
+    # else:
+    tester.inference()
 
 
 if __name__ == "__main__":

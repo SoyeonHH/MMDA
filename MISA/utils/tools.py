@@ -27,7 +27,7 @@ def save_model(args, model, name='', confidNet=None, dynamicKT=None):
         torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}_baseline_epoch({args.n_epoch}).pt')
 
 
-def load_model(args, name='', confidNet=None, dynamic_KT=None):
+def load_model(args, name='', confidNet=None, dynamicKT=None):
     if confidNet is not None:
         file = f'pre_trained_models/best_confidNet_{args.data}_{name}({args.n_epoch}epochs)_{args.conf_loss}_epoch({args.n_epoch_conf}).pt'
         with open(file, 'rb') as f:
@@ -35,7 +35,7 @@ def load_model(args, name='', confidNet=None, dynamic_KT=None):
         model = torch.load(buffer)
         return model
 
-    if dynamic_KT is not None:
+    if dynamicKT is not None:
         file = f'pre_trained_models/best_model_{args.data}_{name}_kt_{args.kt_model}_{args.kt_weight}.pt'
     else:
         file = f'pre_trained_models/best_model_{args.data}_{name}_baseline_epoch({args.n_epoch}).pt'
