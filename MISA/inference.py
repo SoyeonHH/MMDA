@@ -67,7 +67,7 @@ class Inference(object):
             else:
                 self.model.load_state_dict(load_model(config, name=config.model))
         else:
-            self.model.load_state_dict(model)
+            self.model = model
         
         self.model = self.model.to(self.device)
 
