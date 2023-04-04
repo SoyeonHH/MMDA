@@ -167,8 +167,8 @@ class Inference(object):
         y_true = np.concatenate(y_true, axis=0).squeeze()
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
-        csv_file_name = os.getcwd() + "/results_{}_{}_dropout({})-batchsize({}).csv".format(\
-            self.config.data, self.config.model, self.config.dropout, self.config.batch_size)
+        csv_file_name = os.getcwd() + "/results_{}_{}_dropout({})_batchsize({})_epoch({}).csv".format(\
+            self.config.data, self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
 
         # columns = ["id", "input_sentence", "label", "prediction", "Original_Loss", "T_Masked_Loss", "V_Masked_Loss","A_Masked_Loss"]
         # if self.config.use_kt:
