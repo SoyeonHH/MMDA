@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 import config
 from utils.tools import *
 from utils.eval import *
+from utils.functions import *
 import time
 import datetime
 import wandb
@@ -38,7 +39,7 @@ import models
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-class Solver_DKT_Conf(object):
+class Solver_DKT_TCP(object):
     def __init__(self, train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=None):
 
         self.train_config = train_config
@@ -137,7 +138,7 @@ class Solver_DKT_Conf(object):
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver_DKT_Conf.get_label_input()
+                label_input, label_mask = Solver_DKT_TCP.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -151,6 +152,8 @@ class Solver_DKT_Conf(object):
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
                 label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
+
+                self.train_config.use_kt = False
 
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
@@ -204,6 +207,7 @@ class Solver_DKT_Conf(object):
                     self.model.load_state_dict(torch.load(f'checkpoints/model_{self.train_config.name}.std'))
                     self.optimizer.load_state_dict(torch.load(f'checkpoints/optim_{self.train_config.name}.std'))
                     lr_scheduler.step()
+                    print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
             eval_values = get_metrics(truths, preds, average=self.train_config.eval_mode)
 
@@ -242,12 +246,12 @@ class Solver_DKT_Conf(object):
 
                 save_model(self.train_config, self.confidence_model, name="confidNet")
 
-            # wandb.log(
-            #     {
-            #         "train_loss_conf": train_avg_loss_conf,
-            #         "valid_loss_conf": conf_loss
-            #     }
-            # )
+            wandb.log(
+                {
+                    "train_loss_conf": train_avg_loss_conf,
+                    "valid_loss_conf": conf_loss
+                }
+            )
 
 
         ##########################################
@@ -273,7 +277,7 @@ class Solver_DKT_Conf(object):
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver_DKT_Conf.get_label_input()
+                label_input, label_mask = Solver_DKT_TCP.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -290,33 +294,60 @@ class Solver_DKT_Conf(object):
 
                 # return the tcp for each masked modality
                 _, _, _, z_all = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
                 tcp, _ = self.confidence_model(z_all)
+                tcp = torch.where(tcp > 0, tcp, 0.)
 
                 _, _, _, z_text_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text", training=True)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text", training=False)
                 tcp_text_removed, _ = self.confidence_model(z_text_removed)
+                tcp_text_removed = torch.where(tcp_text_removed > 0, tcp_text_removed, 0.)
 
                 _, _, _, z_video_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video", training=True)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video", training=False)
                 tcp_video_removed, _ = self.confidence_model(z_video_removed)
+                tcp_video_removed = torch.where(tcp_video_removed > 0, tcp_video_removed, 0.)
 
                 _, _, _, z_audio_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=True)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=False)
                 tcp_audio_removed, _ = self.confidence_model(z_audio_removed)
-
-                dynamic_weight = [torch.sub(tcp_text_removed, tcp_video_removed).tolist(), \
-                                    torch.sub(tcp_text_removed, tcp_audio_removed).tolist(), \
-                                    torch.sub(tcp_video_removed, tcp_text_removed).tolist(), \
-                                    torch.sub(tcp_video_removed, tcp_audio_removed).tolist(), \
-                                    torch.sub(tcp_audio_removed, tcp_text_removed).tolist(), \
-                                    torch.sub(tcp_audio_removed, tcp_video_removed).tolist()]
+                tcp_audio_removed = torch.where(tcp_audio_removed > 0, tcp_audio_removed, 0.)
                 
-                dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).squeeze().to(self.device)
-                # dynamic_weight = torch.permute(dynamic_weight, (1, 0))
-                dynamic_weight = torch.where(dynamic_weight > 0, dynamic_weight, 0.)
+                dynamic_weight = []
 
+                if self.train_config.dynamic_method == "threshold":
+                    dynamic_weight = [[1 if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [1 if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
                 
+                elif self.train_config.dynamic_method == "ratio":
+                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+                    
+                elif self.train_config.dynamic_method == "noise_level":
+                    dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_video_removed[i] if tcp_video_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
+                                        [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))]]
+                    
+                    
+                dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
+                
+                # update kt_loss weight
+                self.train_config.use_kt = True
+                if e / 10 == 0 and e != 0:
+                    self.train_config.kt_weight *= 2
+                    print("================ KT weight: ", self.train_config.kt_weight, " ================")
+
                 # train the fusion model with dynamic weighted kt
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
@@ -358,7 +389,8 @@ class Solver_DKT_Conf(object):
                 curr_patience = patience
 
                 # 임의로 모델 경로 지정 및 저장
-                save_model(self.train_config, self.model, name=self.train_config.model)
+                save_model(self.train_config, self.model, name=self.train_config.model, dynamicKT=True)
+                save_model(self.train_config, self.confidence_model, name=self.train_config.model, confidNet=True)
 
                 # Print best model results
                 eval_values_best = get_metrics(best_truths, best_results, self.train_config.eval_mode)
@@ -457,7 +489,7 @@ class Solver_DKT_Conf(object):
                 self.confidence_model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver_DKT_Conf.get_label_input()
+                label_input, label_mask = Solver_DKT_TCP.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -510,7 +542,7 @@ class Solver_DKT_Conf(object):
             self.confidence_optimizer.zero_grad()
 
             _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-            label_input, label_mask = Solver_DKT_Conf.get_label_input()
+            label_input, label_mask = Solver_DKT_TCP.get_label_input()
 
             # batch_size = t.size(0)
             t = to_gpu(t)
@@ -562,7 +594,7 @@ class Solver_DKT_Conf(object):
                 self.confidence_model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver_DKT_Conf.get_label_input()
+                label_input, label_mask = Solver_DKT_TCP.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -609,17 +641,9 @@ class Solver_DKT_Conf(object):
     def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)
         tcp_loss = 0.0
         mcp_loss = 0.0
-        tcp_batch = []
 
-        for i in range(truth.size(0)):  # for each batch
-            tcp = 0.0
-            for j in range(truth[i].size(0)):   # for each class
-                tcp += pred[i][j] * truth[i][j]
-            tcp = tcp / torch.count_nonzero(truth[i]) if torch.count_nonzero(truth[i]) != 0 else 0.0
-            tcp_batch.append(tcp)
-        
-        tcp_batch = to_gpu(torch.tensor(tcp_batch))
-        tcp_loss = self.loss_tcp(predicted_tcp, tcp_batch)
+        tcp_target = get_tcp_target(truth, pred)
+        tcp_loss = self.loss_tcp(predicted_tcp, tcp_target)
 
         # pred, truth = torch.permute(pred, (1, 0)), torch.permute(truth, (1, 0)) # (num_classes, batch_size)
 

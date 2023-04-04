@@ -13,7 +13,6 @@ from sklearn.preprocessing import MinMaxScaler
 from utils import to_gpu, to_cpu, DiffLoss, MSE, SIMSE, CMD
 from utils.functions import *
 from utils import ReverseLayerF, getBinaryTensor
-from modules.module_decoder import DecoderModel, DecoderConfig
 
 class EmotionClassifier(nn.Module):
     def __init__(self, input_dims, num_classes, dropout=0.1):
@@ -287,27 +286,16 @@ class MISA(nn.Module):
         self.reconstruct()
 
         # Modalilty masking before fusion with zero padding
-        if masked_modality == "text":
-            self.utt_private_t = torch.zeros_like(self.utt_private_t)
-            self.utt_shared_t = torch.zeros_like(self.utt_shared_t)
-        elif masked_modality == "video":
-            self.utt_private_v = torch.zeros_like(self.utt_private_v)
-            self.utt_shared_v = torch.zeros_like(self.utt_shared_v)
-        elif masked_modality == "audio":
-            self.utt_private_a = torch.zeros_like(self.utt_private_a)
-            self.utt_shared_a = torch.zeros_like(self.utt_shared_a)
-        
-        # Confidence adaptive fusion
-        # TODO: 이거 잘 동작하는지 확인해보기
-        # if text_weight is not None:
-        #     self.utt_private_t = self.utt_private_t * text_weight
-        #     self.utt_shared_t = self.utt_shared_t * text_weight
-        # elif video_weight is not None:
-        #     self.utt_private_v = self.utt_private_v * video_weight
-        #     self.utt_shared_v = self.utt_shared_v * video_weight
-        # elif audio_weight is not None:
-        #     self.utt_private_a = self.utt_private_a * audio_weight
-        #     self.utt_shared_a = self.utt_shared_a * audio_weight
+        if masked_modality is not None:
+            if "text" in masked_modality:
+                self.utt_private_t = torch.zeros_like(self.utt_private_t)
+                self.utt_shared_t = torch.zeros_like(self.utt_shared_t)
+            if "video" in masked_modality:
+                self.utt_private_v = torch.zeros_like(self.utt_private_v)
+                self.utt_shared_v = torch.zeros_like(self.utt_shared_v)
+            if "audio" in masked_modality:
+                self.utt_private_a = torch.zeros_like(self.utt_private_a)
+                self.utt_shared_a = torch.zeros_like(self.utt_shared_a)
         
         
         # 1-LAYER TRANSFORMER FUSION
@@ -321,16 +309,11 @@ class MISA(nn.Module):
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
 
-
-        # Calculate loss
-        if self.config.data == "ur_funny":
-            y = y.squeeze()
-
-
+        # loss
         cls_loss = get_cls_loss(self.config, predicted_scores, labels)
         kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
-        cmd_loss =       get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
+        cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
         recon_loss = get_recon_loss([self.utt_t_recon, self.utt_v_recon, self.utt_a_recon], [self.utt_t_orig, self.utt_v_orig, self.utt_a_orig])
 
@@ -339,62 +322,14 @@ class MISA(nn.Module):
         else:
             similarity_loss = domain_loss
 
-        if training:#elif args.kt_model == 'Dynamic-ce':
+        if training:
             loss = cls_loss + \
                 self.config.diff_weight * diff_loss + \
                 self.config.sim_weight * similarity_loss + \
                 self.config.recon_weight * recon_loss
-            if (self.config.kt_model=="Dynamic-ce"):
-                if self.config.use_cmd_sim:
-                    similarity_f = get_cmd_loss
-                else:
-                    similarity_f = get_domain_loss
-                
-                
-                masked_t_h = torch.stack((torch.zeros_like(self.utt_private_t), self.utt_private_v, self.utt_private_a, torch.zeros_like(self.utt_shared_t), self.utt_shared_v,  self.utt_shared_a), dim=0)
-                masked_t_h = self.transformer_encoder(masked_t_h)
-                masked_t_h = torch.cat((masked_t_h[0], masked_t_h[1], masked_t_h[2], masked_t_h[3], masked_t_h[4], masked_t_h[5]), dim=1)
-                masked_t_predicted_scores = self.classifier(masked_t_h)
-                masked_t_predicted_scores = masked_t_predicted_scores.view(-1, self.config.num_classes)
-                
-                masked_a_h = torch.stack((self.utt_private_t, self.utt_private_v, torch.zeros_like(self.utt_private_a), self.utt_shared_t, self.utt_shared_v,  torch.zeros_like(self.utt_shared_a)), dim=0)
-                masked_a_h = self.transformer_encoder(masked_a_h)
-                masked_a_h = torch.cat((masked_a_h[0], masked_a_h[1], masked_a_h[2], masked_a_h[3], masked_a_h[4], masked_a_h[5]), dim=1)
-                masked_a_predicted_scores = self.classifier(masked_a_h)
-                masked_a_predicted_scores = masked_a_predicted_scores.view(-1, self.config.num_classes)
-                
-                masked_v_h = torch.stack((self.utt_private_t, torch.zeros_like(self.utt_private_v), self.utt_private_a, self.utt_shared_t, torch.zeros_like(self.utt_shared_v),  self.utt_shared_a), dim=0)
-                masked_v_h = self.transformer_encoder(masked_v_h)
-                masked_v_h = torch.cat((masked_v_h[0], masked_v_h[1], masked_v_h[2], masked_v_h[3], masked_v_h[4], masked_v_h[5]), dim=1)
-                masked_v_predicted_scores = self.classifier(masked_v_h)
-                masked_v_predicted_scores = masked_v_predicted_scores.view(-1, self.config.num_classes)
-                
-                t_mask_loss = get_cls_loss(self.config, masked_t_predicted_scores, predicted_scores)
-                a_mask_loss = get_cls_loss(self.config, masked_a_predicted_scores, predicted_scores)
-                v_mask_loss = get_cls_loss(self.config, masked_v_predicted_scores, predicted_scores)
-                
-                dynamic_weight_list = [0,0,0,0,0,0]
-                if(t_mask_loss > v_mask_loss):
-                    dynamic_weight_list[0] = 1
-                if(t_mask_loss > a_mask_loss):
-                    dynamic_weight_list[1] = 1
-                if(v_mask_loss > t_mask_loss):
-                    dynamic_weight_list[2] = 1
-                if(v_mask_loss > a_mask_loss):
-                    dynamic_weight_list[3] = 1
-                if(a_mask_loss > t_mask_loss):
-                    dynamic_weight_list[4] = 1
-                if(a_mask_loss > v_mask_loss):
-                    dynamic_weight_list[5] = 1
-                
-                h = [loss, t_mask_loss, a_mask_loss, v_mask_loss ]
-                #ce_loss = t_mask_loss + a_mask_loss +v_mask_loss
-                kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weight_list)
-                loss += kt_loss
-            elif self.config.use_kt:
+
+            if self.config.use_kt:
                 loss += self.config.kt_weight * kt_loss
-                #for kt_modal_loss in kt_loss:
-                #    loss += kt_loss
         else:
             loss = cls_loss
 

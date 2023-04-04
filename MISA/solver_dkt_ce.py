@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 import config
 from utils.tools import *
 from utils.eval import *
+from utils.functions import *
 import time
 import datetime
 import wandb
@@ -38,7 +39,7 @@ import models
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-class Solver(object):
+class Solver_DKT_CE(object):
     def __init__(self, train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, model=None):
 
         self.train_config = train_config
@@ -115,7 +116,7 @@ class Solver(object):
         train_kt_loss = []
 
         ##########################################
-        # 1. Train the Fusion model
+        # Train
         ##########################################
 
         # total_start = time.time()
@@ -127,7 +128,7 @@ class Solver(object):
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
                 self.model.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
+                label_input, label_mask = Solver_DKT_CE.get_label_input()
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -142,10 +143,59 @@ class Solver(object):
                 bert_sent_mask = to_gpu(bert_sent_mask)
                 label_input, label_mask = to_gpu(label_input), to_gpu(label_mask)
 
-                loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=True)
-                # y_tilde = y_tilde.squeeze()
 
+                # TODO: Add dynamic masking module
+
+                _, prob_all, _, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                
+                _, prob_text_removed, _, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text", training=False)
+
+                _, prob_video_removed, _, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video", training=False)
+
+                _, prob_audio_removed, _, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=False)
+                
+                t_mask_loss = binary_ce(prob_all, prob_text_removed)
+                v_mask_loss = binary_ce(prob_all, prob_video_removed)
+                a_mask_loss = binary_ce(prob_all, prob_audio_removed)
+
+                if self.train_config.dynamic_method == "threshold":
+                    dynamic_weight = [[0 if t_mask_loss[i] > v_mask_loss[i] else 1 for i in range(len(t_mask_loss))], \
+                        [0 if t_mask_loss[i] > a_mask_loss[i] else 1 for i in range(len(t_mask_loss))], \
+                        [0 if v_mask_loss[i] > t_mask_loss[i] else 1 for i in range(len(t_mask_loss))], \
+                        [0 if v_mask_loss[i] > a_mask_loss[i] else 1 for i in range(len(t_mask_loss))], \
+                        [0 if a_mask_loss[i] > t_mask_loss[i] else 1 for i in range(len(t_mask_loss))], \
+                        [0 if a_mask_loss[i] > v_mask_loss[i] else 1 for i in range(len(t_mask_loss))]]
+                
+                elif self.train_config.dynamic_method == "ratio":
+                    # dynamic_weight = [[t_mask_loss[i] / v_mask_loss[i] if t_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [t_mask_loss[i] / a_mask_loss[i] if t_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [v_mask_loss[i] / t_mask_loss[i] if v_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [v_mask_loss[i] / a_mask_loss[i] if v_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [a_mask_loss[i] / t_mask_loss[i] if a_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                    #     [a_mask_loss[i] / v_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
+                    
+                    # TODO: Train again with this ratio
+                    dynamic_weight = [[t_mask_loss[i] / v_mask_loss[i] if t_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [t_mask_loss[i] if t_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [v_mask_loss[i] if v_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [v_mask_loss[i] if v_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [a_mask_loss[i] if a_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+                        [a_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
+
+                dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
+                
+                # update kt_loss weight
+                if e / 10 == 0 and e != 0:
+                    self.train_config.kt_weight *= 2
+                    print("================ KT weight: ", self.train_config.kt_weight, " ================")
+
+                loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
+                        training=True, dynamic_weights=dynamic_weight)
                 loss.backward()
                 
                 torch.nn.utils.clip_grad_value_([param for param in self.model.parameters() if param.requires_grad], self.train_config.clip)
@@ -158,24 +208,12 @@ class Solver(object):
             train_avg_loss = round(np.mean(train_loss), 4)
             print(f"Training loss: {train_avg_loss}")
 
-            ##########################################
-            # 2. Train tcp
-            ##########################################
-            
-
-            ##########################################
-            # 3. Train the Fusion model with dynamic weighted kt
-            ##########################################
-
-            # TODO: Implement this
-
-
 
             ##########################################
             # model evaluation with dev set
             ##########################################
 
-            valid_loss, valid_loss_conf, valid_acc, preds, truths, tcp = self.eval(mode="dev")
+            valid_loss, valid_acc, preds, truths = self.eval(mode="dev")
 
             print("-" * 100)
             print("Epochs: {}, Valid loss: {}, Valid acc: {}".format(e, valid_loss, valid_acc))
@@ -197,9 +235,8 @@ class Solver(object):
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
                 save_model(self.train_config, self.model, name=self.train_config.model)
-                save_tcp(self.train_config, tcp, name="fusion_representation")
                 # Print best model results
-                eval_values = get_metrics(best_truths, best_results)
+                eval_values = get_metrics(best_truths, best_results, average=self.train_config.eval_mode)
                 print("-"*50)
                 print("epoch: {}, valid_loss: {}, valid_acc: {}, f1: {}, precision: {}, recall: {}".format( \
                     best_epoch, valid_loss, eval_values['acc'], eval_values['f1'], eval_values['precision'], eval_values['recall']))
@@ -218,48 +255,20 @@ class Solver(object):
                     lr_scheduler.step()
                     print(f"Current learning rate: {self.optimizer.state_dict()['param_groups'][0]['lr']}")
             
-            if self.train_config.eval_mode == "macro":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['f1'],
-                            "test_precision": eval_values['precision'],
-                            "test_recall": eval_values['recall'],
-                            "test_acc2": eval_values['acc'],
-                            "valid_loss_conf": valid_loss_conf
-                        }
-                    )
+            eval_values = get_metrics(truths, preds, self.train_config.eval_mode)
+            
+            wandb.log(
+                (
+                    {
+                        "train_loss": train_avg_loss,
+                        "valid_loss": valid_loss,
+                        "test_f_score": eval_values['f1'],
+                        "test_precision": eval_values['precision'],
+                        "test_recall": eval_values['recall'],
+                        "test_acc2": eval_values['acc']
+                    }
                 )
-            elif self.train_config.eval_mode == "micro":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['micro_f1'],
-                            "test_precision": eval_values['micro_precision'],
-                            "test_recall": eval_values['micro_recall'],
-                            "test_acc2": eval_values['acc'],
-                            "valid_loss_conf": valid_loss_conf
-                        }
-                    )
-                )
-            elif self.train_config.eval_mode == "weighted":
-                wandb.log(
-                    (
-                        {
-                            "train_loss": train_avg_loss,
-                            "valid_loss": valid_loss,
-                            "test_f_score": eval_values['weighted_f1'],
-                            "test_precision": eval_values['weighted_precision'],
-                            "test_recall": eval_values['weighted_recall'],
-                            "test_acc2": eval_values['acc'],
-                            "valid_loss_conf": valid_loss_conf
-                        }
-                    )
-                )
+            )
 
             # hyperparameter tuning report
             hpt.report_hyperparameter_tuning_metric(
@@ -273,16 +282,25 @@ class Solver(object):
         ##########################################
 
         print("model training is finished.")
-        train_loss, train_loss_conf, acc, test_preds, test_truths, test_tcp = self.eval(mode="test", to_print=True)
+        train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
-        eval_values_best = get_metrics(best_truths, best_results)
+        eval_values_best = get_metrics(best_truths, best_results, average=self.train_config.eval_mode)
         best_acc, best_f1, best_precision, best_recall = \
-             eval_values_best['acc'], eval_values_best['micro_f1'], eval_values_best['micro_precision'], eval_values_best['micro_recall']
+             eval_values_best['acc'], eval_values_best['f1'], eval_values_best['precision'], eval_values_best['recall']
         print(f'Accuracy: {best_acc}')
         print(f'F1 score: {best_f1}')
         print(f'Precision: {best_precision}')
         print(f'Recall: {best_recall}')
+
+        print('='*50)
+        print("Test results")
+        test_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
+        eval_values = get_metrics(test_truths, test_preds, average=self.train_config.eval_mode)
+        print(f"Test accuracy: {eval_values['acc']}")
+        print(f"Test f1 score: {eval_values['f1']}")
+        print(f"Test precision: {eval_values['precision']}")
+        print(f"Test recall: {eval_values['recall']}")
         # total_end = time.time()
         # total_duration = total_end - total_start
         # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
@@ -294,8 +312,7 @@ class Solver(object):
         self.model.eval()
 
         y_true, y_pred = [], []
-        eval_loss, eval_loss_diff, eval_conf_loss = [], [], []
-        tcp = []
+        eval_loss, eval_loss_diff = [], []
 
         if mode == "dev":
             dataloader = self.dev_data_loader
@@ -311,10 +328,9 @@ class Solver(object):
 
             for batch in dataloader:
                 self.model.zero_grad()
-                self.confidence_model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
+                label_input, label_mask = Solver_DKT_CE.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -334,29 +350,22 @@ class Solver(object):
                                masked_modality=None, training=False)
 
                 emo_label = emo_label.type(torch.float)
-                predicted_tcp, scaled_tcp = predicted_tcp.squeeze(), scaled_tcp.squeeze()
-
-                conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
 
                 eval_loss.append(loss.item())
-                eval_conf_loss.append(conf_loss.item())
 
                 # y_tilde = torch.argmax(y_tilde, dim=1)
                 # emo_label = torch.argmax(emo_label, dim=1)
                 y_pred.append(predicted_labels.detach().cpu().numpy())
                 y_true.append(emo_label.detach().cpu().numpy())
-                tcp.append(predicted_tcp.detach().cpu().numpy())
 
 
         eval_loss = np.mean(eval_loss)
-        eval_conf_loss = np.mean(eval_conf_loss)
         y_true = np.concatenate(y_true, axis=0).squeeze()   # (1871, 6)
         y_pred = np.concatenate(y_pred, axis=0).squeeze()   # (1871, 6)
-        tcp = np.concatenate(tcp).squeeze()   # (1871, 1)
 
         accuracy = get_accuracy(y_true, y_pred)
 
-        return eval_loss, eval_conf_loss, accuracy, y_pred, y_true, tcp
+        return eval_loss, accuracy, y_pred, y_true
 
     @staticmethod
     def get_label_input():

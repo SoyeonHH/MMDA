@@ -1,6 +1,7 @@
 import torch
 import os
 import io
+import csv
 
 
 def save_load_name(args, name=''):
@@ -12,14 +13,32 @@ def save_load_name(args, name=''):
     return name + '_' + args.model
 
 
-def save_model(args, model, name=''):
+def save_model(args, model, name='', confidNet=None, dynamicKT=None):
     if not os.path.exists('pre_trained_models'):
         os.mkdir('pre_trained_models')
-    torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}.pt')
+    
+    if confidNet is not None:
+        torch.save(model.state_dict(), f'pre_trained_models/best_confidNet_{args.data}_{name}({args.n_epoch}epochs)_{args.conf_loss}_epoch({args.n_epoch_conf}).pt')
+        return
+
+    if dynamicKT is not None:
+        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}_kt_{args.kt_model}_{args.kt_weight}.pt')
+    else:
+        torch.save(model.state_dict(), f'pre_trained_models/best_model_{args.data}_{name}_baseline_epoch({args.n_epoch}).pt')
 
 
-def load_model(args, name=''):
-    file = f'pre_trained_models/best_model_{args.data}_{name}.pt'
+def load_model(args, name='', confidNet=None, dynamicKT=None):
+    if confidNet is not None:
+        file = f'pre_trained_models/best_confidNet_{args.data}_{name}({args.n_epoch}epochs)_{args.conf_loss}_epoch({args.n_epoch_conf}).pt'
+        with open(file, 'rb') as f:
+            buffer = io.BytesIO(f.read())
+        model = torch.load(buffer)
+        return model
+
+    if dynamicKT is not None:
+        file = f'pre_trained_models/best_model_{args.data}_{name}_kt_{args.kt_model}_{args.kt_weight}.pt'
+    else:
+        file = f'pre_trained_models/best_model_{args.data}_{name}_baseline_epoch({args.n_epoch}).pt'
     with open(file, 'rb') as f:
         buffer = io.BytesIO(f.read())
     model = torch.load(buffer)
@@ -42,29 +61,14 @@ def random_shuffle(tensor, dim=0):
     
     return t
 
-def save_hidden(args, tensor, dataset=''):
-    if args.use_confidNet:
-        file = f'hidden_vectors/MISA_C_{dataset}.pt'
-    else:
-        file = f'hidden_vectors/MISA_{dataset}.pt'
-
-    if not os.path.exists('hidden_vectors'):
-        os.mkdir('hidden_vectors')
-    torch.save(tensor, f'hidden_vectors/MISA_{dataset}.pt')
-
-
-def load_hidden(args, dataset=''):
-    if args.use_confidNet:
-        file = f'hidden_vectors/MISA_C_{dataset}.pt'
-    else:
-        file = f'hidden_vectors/MISA_{dataset}.pt'
-
-    with open(file, 'rb') as f:
-        buffer = io.BytesIO(f.read())
-    H = torch.load(buffer)
-    return H
-
-def save_tcp(args, tcp, name=''):
-    if not os.path.exists('pre_trained_models'):
-        os.mkdir('pre_trained_models')
-    torch.save(tcp, f'pre_trained_models/best_tcp_{args.data}_{name}.pt')
+def save_results(args, results, mode=None):
+    if not os.path.exists('results'):
+        os.mkdir('results')
+    
+    file_name = f'/results/{args.data}_{args.model}_confidNet_{args.conf_loss}_epoch({args.n_epoch_conf})_{mode}_results_process_all_zero_version.csv'
+    
+    with open(os.getcwd() + file_name, mode='w') as file:
+        writer = csv.DictWriter(file, fieldnames=results[0].keys())
+        writer.writeheader()
+        for d in results:
+            writer.writerow(d)

@@ -341,3 +341,34 @@ def distillation_loss(output, target, T):
     target = F.softmax(target / T)
     loss = -torch.sum(target * output) / output.size()[0]
     return loss
+
+
+def binary_ce(output1, output2):
+    """
+    Binary Cross Entropy Loss
+    :param output1:
+    :param output2:
+    :return:
+    """
+    loss_bce = nn.BCEWithLogitsLoss(reduction='mean')
+    loss = [loss_bce(output1[i], output2[i]) for i in range(len(output1))]
+    return loss
+
+
+def get_tcp_target(y_true, y_pred):
+    """
+    Calculate the TCP for each batch
+    :param y_true: (batch_size, num_classes)
+    :param y_pred: (batch_size, num_classes)
+    :return: (batch_size)
+    """
+    tcp_target = []
+    for i in range(y_true.shape[0]):    # for each batch
+        tcp = 0.0
+        for j in range(y_true[i].shape[0]): # for each class
+            tcp += y_pred[i][j] * y_true[i][j]
+
+        tcp = tcp / torch.count_nonzero(y_true[i]) if torch.count_nonzero(y_true[i]) != 0 else 0.0
+        tcp_target.append(tcp)
+    
+    return to_gpu(torch.tensor(tcp_target))
