@@ -72,14 +72,9 @@ class Inference(object):
         self.model = self.model.to(self.device)
         
 
-        if confidence_model is None and config.use_confidNet:
-            self.confidence_model = ConfidenceRegressionNetwork(self.config, self.config.hidden_size*6, \
-                                                                num_classes=1, dropout=self.config.conf_dropout)
-            self.confidence_model = load_model(config, confidNet=True)
-        else:
+        if confidence_model is not None:
             self.confidence_model = confidence_model
-        
-        self.confidence_model = self.confidence_model.to(self.device)
+            self.confidence_model = self.confidence_model.to(self.device)
         
         
     
