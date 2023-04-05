@@ -72,7 +72,7 @@ class ConfidNet_Trainer(object):
     def build(self):
         if self.model is None:
             self.model = getattr(models, self.config.model)(self.config)
-            self.model.load_state_dict(load_model(self.config))
+            self.model = load_model(self.config)
             self.model = self.model.to(self.device)
 
         self.model.eval()

@@ -48,6 +48,7 @@ torch.cuda.manual_seed_all(123)
 
 from MISA.utils import to_gpu, to_cpu, time_desc_decorator
 import MISA.models as models
+from confidNet import ConfidenceRegressionNetwork
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
@@ -62,9 +63,9 @@ class Inference(object):
         if model is None:
             self.model = getattr(models, config.model)(config)
             if dkt:
-                self.model.load_state_dict(load_model(config, dynamicKT=True))
+                self.model = load_model(config, dynamicKT=True)
             else:
-                self.model.load_state_dict(load_model(config))
+                self.model = load_model(config)
         else:
             self.model = model
             
@@ -72,9 +73,9 @@ class Inference(object):
         
 
         if confidence_model is None and config.use_confidNet:
-            self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.config, self.config.hidden_size*6, \
-                num_classes=1, dropout=self.config.conf_dropout)
-            self.confidence_model.load_state_dict(load_model(config, confidNet=True))
+            self.confidence_model = ConfidenceRegressionNetwork(self.config, self.config.hidden_size*6, \
+                                                                num_classes=1, dropout=self.config.conf_dropout)
+            self.confidence_model = load_model(config, confidNet=True)
         else:
             self.confidence_model = confidence_model
         
@@ -101,7 +102,6 @@ class Inference(object):
 
                 actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids,\
                      _, _, _, _, _ = batch
-                label_input, label_mask = Solver.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -113,8 +113,6 @@ class Inference(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
-                label_input = to_gpu(label_input)
-                label_mask = to_gpu(label_mask)
 
                 loss, predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
@@ -264,7 +262,6 @@ class Inference(object):
 
                 actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
                     _, _, _, _, _ = batch
-                label_input, label_mask = Solver.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -276,8 +273,6 @@ class Inference(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
-                label_input = to_gpu(label_input)
-                label_mask = to_gpu(label_mask)
 
                 # Mutli-Modal Fusion Model
                 loss, predicted_scores, predicted_labels, hidden_state = \

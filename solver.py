@@ -58,7 +58,7 @@ class Solver(object):
         print(f"current device: {self.device}")
     
     # @time_desc_decorator('Build Graph')
-    def build(self, cuda=True, pretrained_model=None): 
+    def build(self, cuda=True): 
         
         # Prepare model
         if self.model is None:
@@ -198,7 +198,7 @@ class Solver(object):
                 
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
-                save_model(self.train_config, self.model, dynamicKT=True) if self.additional_training else save_model(self.train_config, self.model)
+                save_model(self.train_config, self.model, dynamicKT=True) if additional_training else save_model(self.train_config, self.model)
                 # Print best model results
                 eval_values_best = get_metrics(best_truths, best_results, average=self.train_config.eval_mode)
                 print("-"*50)
@@ -298,8 +298,6 @@ class Solver(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
-                label_input = to_gpu(label_input)
-                label_mask = to_gpu(label_mask)
 
                 loss, predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, \
