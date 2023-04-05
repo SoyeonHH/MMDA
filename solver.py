@@ -20,7 +20,6 @@ import torch.nn as nn
 from utils.tools import *
 from utils.eval import *
 from MISA.utils.functions import *
-from confidNet import ConfidenceRegressionNetwork
 import time
 import datetime
 import wandb
@@ -35,6 +34,7 @@ from MISA.utils import to_gpu, to_cpu, time_desc_decorator, DiffLoss, MSE, SIMSE
 from MISA.models import MISA
 from TAILOR.models import TAILOR
 from TAILOR.optimization import BertAdam
+from confidNet import ConfidenceRegressionNetwork
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
@@ -102,6 +102,7 @@ class Solver(object):
         self.model.to(self.device)
 
         if self.is_train:
+            self.model.train()
             self.optimizer = self.train_config.optimizer(
                 filter(lambda p: p.requires_grad, self.model.parameters()),
                 lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
@@ -446,3 +447,213 @@ class Solver(object):
         dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
 
         return dynamic_weight
+    
+
+
+class ConfidNet_Trainer(object):
+    def __init__(self, config, train_data_loader, dev_data_loader, test_data_loader, model=None, confidnet=None):
+        self.config = config
+        self.train_data_loader = train_data_loader
+        self.dev_data_loader = dev_data_loader
+        self.test_data_loader = test_data_loader
+        self.confidnet = confidnet
+        self.model = model
+        self.device = torch.device(config.device)
+        print(f"current device: {self.device}")
+    
+    def build(self):
+        if self.model is None:
+            self.model = load_model(self.config)
+
+        self.model.eval()
+
+        # Freeze the model
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        # Initialize confidence network
+        if self.confidnet is None:
+            self.confidnet = ConfidenceRegressionNetwork(self.config, input_dims=self.config.hidden_size*6, num_classes=1, dropout=self.config.conf_dropout)
+            self.confidnet = self.confidnet.to(self.device)
+
+        self.optimizer = torch.optim.Adam(self.confidnet.parameters(), lr=self.config.conf_lr)
+
+        # Initialize weight of Embedding matrix with Glove embeddings
+        if not self.config.use_bert:
+            if self.config.pretrained_emb is not None:
+                self.model.embed.weight.data = self.config.pretrained_emb
+            self.model.embed.requires_grad = False
+        
+
+    def train(self):
+        print("Training Confidence Network...")
+        self.confidnet.train()
+        train_results = []
+        best_valid_loss = float('inf')
+
+        for epoch in range(self.config.n_epoch_conf):
+            train_losses = []
+
+            for i, batch in enumerate(tqdm(self.train_data_loader)):
+                self.optimizer.zero_grad()
+
+                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
+                    _, _, _, _, _ = batch
+
+                # batch_size = t.size(0)
+                t = to_gpu(t)
+                v = to_gpu(v)
+                a = to_gpu(a)
+                y = to_gpu(y)
+                emo_label = to_gpu(emo_label)
+                # l = to_gpu(l)
+                l = to_cpu(l)
+                bert_sent = to_gpu(bert_sent)
+                bert_sent_type = to_gpu(bert_sent_type)
+                bert_sent_mask = to_gpu(bert_sent_mask)
+
+                # Get the output from the classification model
+                _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                target_tcp = get_tcp_target(emo_label, outputs)
+                
+                loss, predicts = self.confidnet(hidden_state, target_tcp)
+
+                loss.backward()
+                self.optimizer.step()
+
+                train_losses.append(loss.item())
+
+                for idx in range(len(ids)):
+                    train_result = {
+                        "epoch": epoch,
+                        "id": ids[idx],
+                        "confid_loss": loss.item(),
+                        "target_tcp": target_tcp[idx].item(),
+                        "predict_tcp": predicts[idx].item(),
+                        "emo_label": emo_label[idx].detach().cpu().numpy(),
+                        "predict": outputs[idx].detach().cpu().numpy(),
+                        "input_text": actual_words[idx]
+                    }
+                    train_results.append(train_result)
+            
+            train_avg_loss = np.mean(train_losses)
+            print(f"Epoch: {epoch}, Train Loss: {train_avg_loss}")
+        
+            # Model Validation
+            valid_loss, _ = self.eval(mode="dev")
+
+            print("-" * 100)
+            print("Epochs: {}, Valid loss: {}".format(epoch, valid_loss))
+            print("-" * 100)
+
+            if valid_loss < best_valid_loss:
+                best_valid_loss = valid_loss
+                best_epoch = epoch
+                print("Saving the best model...")
+                save_model(self.config, self.confidnet, confidNet=True)
+
+            wandb.log({"train_loss": train_avg_loss, "valid_loss": valid_loss})
+
+
+        # Model Test
+        print("Testing the model...")
+        test_loss, test_result = self.eval(mode="test")
+        print('='*50)
+        print(f'Best epoch: {best_epoch}')
+        print(f'Best valid loss: {best_valid_loss}')
+        print(f'Test loss: {test_loss}')
+        print('='*50)
+
+        # Save the results
+        save_results(self.config, train_results, mode="train")
+        save_results(self.config, test_result, mode="test")
+
+        return self.confidnet
+
+    
+    def eval(self, mode=None):
+        self.confidnet.eval()
+        eval_losses = []
+        eval_results = []
+
+        if mode == "dev":
+            dataloader = self.dev_data_loader
+        elif mode == "test":
+            dataloader = self.test_data_loader
+        
+        with torch.no_grad():
+
+            for batch in dataloader:
+                # self.model.zero_grad()
+                # self.confidnet.zero_grad()
+
+                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
+                    _, _, _, _, _ = batch
+
+                t = to_gpu(t)
+                v = to_gpu(v)
+                a = to_gpu(a)
+                y = to_gpu(y)
+                emo_label = to_gpu(emo_label)
+                # l = to_gpu(l)
+                l = to_cpu(l)
+                bert_sent = to_gpu(bert_sent)
+                bert_sent_type = to_gpu(bert_sent_type)
+                bert_sent_mask = to_gpu(bert_sent_mask)
+
+                _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                target_tcp = get_tcp_target(emo_label, outputs)
+                
+                loss, predicts = self.confidnet(hidden_state, target_tcp)
+
+                eval_losses.append(loss.item())
+
+                if mode == "test":
+                    # return the tcp for each maksed modality
+                    _, logit_text_removed, _, z_text_removed = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
+                    _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
+
+                    _, logit_video_removed, _, z_video_removed = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
+                    _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
+
+                    _, logit_audio_removed, _, z_audio_removed = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
+                    _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
+
+                    _, logit_only_text, _, z_only_text = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
+                    _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
+
+                    _, logit_only_video, _, z_only_video = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
+                    _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
+
+                    _, logit_only_audio, _, z_only_audio = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
+                    _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
+
+                    for idx in range(len(ids)):
+                        eval_result = {
+                            "id": ids[idx],
+                            "input_text": actual_words[idx],
+                            "emo_label": emo_label[idx].detach().cpu().numpy(),
+                            "predict": outputs[idx].detach().cpu().numpy(),
+                            "confid_loss": loss.item(),
+                            "target_tcp": target_tcp[idx].item(),
+                            "pred_tcp": predicts[idx].item(),
+                            "tcp_VA": get_tcp_target(emo_label, logit_text_removed)[idx].item(),
+                            "tcp_TA": get_tcp_target(emo_label, logit_video_removed)[idx].item(),
+                            "tcp_TV": get_tcp_target(emo_label, logit_audio_removed)[idx].item(),
+                            "tcp_T": get_tcp_target(emo_label, logit_only_text)[idx].item(),
+                            "tcp_V": get_tcp_target(emo_label, logit_only_video)[idx].item(),
+                            "tcp_A": get_tcp_target(emo_label, logit_only_audio)[idx].item()
+                        }
+                        eval_results.append(eval_result)
+
+        eval_avg_loss = np.mean(eval_losses)
+
+        return eval_avg_loss, eval_results
