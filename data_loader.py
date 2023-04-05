@@ -11,7 +11,26 @@ from transformers import *
 
 from create_dataset import MOSEI, PAD, UNK
 
+"""
+CMU-MOSEI info
+Train 16326 samples
+Val 1871 samples
+Test 4659 samples
+CMU-MOSEI feature shapes
+visual: (60, 35)
+audio: (60, 74)
+text: GLOVE->(60, 300)
+label: (6) -> [happy, sad, anger, surprise, disgust, fear] 
+    averaged from 3 annotators
+unaligned:
+text: (50, 300)
+visual: (500, 35)
+audio: (500, 74)    
+"""
+
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+emotion_dict = {4:0, 5:1, 6:2, 7:3, 8:4, 9:5}
 
 class AlignedMoseiDataset(Dataset):
     def __init__(self, config, zero_label_process=False):
@@ -32,7 +51,9 @@ class AlignedMoseiDataset(Dataset):
 
     def __len__(self):
         return self.len
+        
     
+
 def get_loader(config, shuffle=True, zero_label_process=False):
     """Load DataLoader of given DialogDataset"""
 
@@ -56,6 +77,11 @@ def get_loader(config, shuffle=True, zero_label_process=False):
         sentences = pad_sequence([torch.LongTensor(sample[0][0]) for sample in batch], padding_value=PAD)
         visual = pad_sequence([torch.FloatTensor(sample[0][1]) for sample in batch])
         acoustic = pad_sequence([torch.FloatTensor(sample[0][2]) for sample in batch])
+
+        # TODO: get modality mask for TAILOR baseline
+        visual_mask = torch.ones_like(visual)
+        audio_mask = torch.ones_like(acoustic)
+        text_mask = torch.ones_like(sentences)
 
         ## BERT-based features input prep
 
@@ -94,6 +120,13 @@ def get_loader(config, shuffle=True, zero_label_process=False):
         else:
             emo_labels = None
 
+        
+        # get label input for TAILOR baseline
+        labels_embedding = np.arange(6)
+        labels_mask = [1] * labels_embedding.shape[0]
+        labels_mask = np.array(labels_mask)
+        labels_embedding = torch.from_numpy(labels_embedding)
+        labels_mask = torch.from_numpy(labels_mask)
 
         # Bert things are batch_first
         bert_sentences = torch.LongTensor([sample["input_ids"] for sample in bert_details])
@@ -107,7 +140,8 @@ def get_loader(config, shuffle=True, zero_label_process=False):
         # lengths are useful later in using RNNs
         lengths = torch.LongTensor([sample[0][0].shape[0] for sample in batch])
 
-        return actual_words, sentences, visual, acoustic, labels, emo_labels, lengths, bert_sentences, bert_sentence_types, bert_sentence_att_mask, ids
+        return actual_words, sentences, visual, acoustic, labels, emo_labels, lengths, bert_sentences, bert_sentence_types, bert_sentence_att_mask, ids,\
+            visual_mask, audio_mask, text_mask, labels_embedding, labels_mask
 
 
     data_loader = DataLoader(

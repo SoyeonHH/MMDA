@@ -10,9 +10,9 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 from transformers import BertModel, BertConfig
 from sklearn.preprocessing import MinMaxScaler
 
-from utils import to_gpu, to_cpu, DiffLoss, MSE, SIMSE, CMD
-from utils.functions import *
-from utils import ReverseLayerF, getBinaryTensor
+from MISA.utils import to_gpu, to_cpu, DiffLoss, MSE, SIMSE, CMD
+from MISA.utils.functions import *
+from MISA.utils import ReverseLayerF, getBinaryTensor
 
 class EmotionClassifier(nn.Module):
     def __init__(self, input_dims, num_classes, dropout=0.1):

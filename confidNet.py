@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from config import get_config, activation_dict
 from data_loader import get_loader
-from utils.tools import *
+from MISA.utils.tools import *
 from transformers import BertTokenizer
 
 import torch
@@ -17,9 +17,9 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
-from utils.tools import *
-from utils.eval_metrics import *
-from utils.functions import *
+from MISA.utils.tools import *
+from MISA.utils.eval_metrics import *
+from MISA.utils.functions import *
 import time
 import datetime
 import wandb
@@ -31,8 +31,8 @@ os.chdir(os.getcwd())
 torch.manual_seed(123)
 torch.cuda.manual_seed_all(123)
 
-from utils import to_gpu, to_cpu, time_desc_decorator, DiffLoss, MSE, SIMSE, CMD
-import models
+from MISA.utils import to_gpu, to_cpu, time_desc_decorator, DiffLoss, MSE, SIMSE, CMD
+import MISA.models as models
 
 
 class ConfidenceRegressionNetwork(nn.Module):
@@ -109,7 +109,8 @@ class ConfidNet_Trainer(object):
             for i, batch in enumerate(tqdm(self.train_data_loader)):
                 self.optimizer.zero_grad()
 
-                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
+                    _, _, _, _, _ = batch
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -199,7 +200,8 @@ class ConfidNet_Trainer(object):
                 # self.model.zero_grad()
                 # self.confidnet.zero_grad()
 
-                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
+                    _, _, _, _, _ = batch
 
                 t = to_gpu(t)
                 v = to_gpu(v)

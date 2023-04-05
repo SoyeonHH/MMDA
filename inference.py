@@ -30,10 +30,10 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
-import config
-from utils.tools import *
-from utils.eval import *
-from utils.functions import *
+import config as config
+from MISA.utils.tools import *
+from MISA.utils.eval import *
+from MISA.utils.functions import *
 import time
 import datetime
 import wandb
@@ -46,8 +46,8 @@ os.chdir(os.getcwd())
 torch.manual_seed(123)
 torch.cuda.manual_seed_all(123)
 
-from utils import to_gpu, to_cpu, time_desc_decorator
-import models
+from MISA.utils import to_gpu, to_cpu, time_desc_decorator
+import MISA.models as models
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
@@ -98,7 +98,8 @@ class Inference(object):
                 self.model.zero_grad()
                 result = dict()
 
-                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids,\
+                     _, _, _, _, _ = batch
                 label_input, label_mask = Solver.get_label_input()
 
                 t = to_gpu(t)
@@ -260,7 +261,8 @@ class Inference(object):
                 self.model.zero_grad()
                 self.confidence_model.zero_grad()
 
-                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
+                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
+                    _, _, _, _, _ = batch
                 label_input, label_mask = Solver.get_label_input()
 
                 t = to_gpu(t)
