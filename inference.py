@@ -152,9 +152,9 @@ class Inference(object):
                 results["tcp_AV"].extend(get_tcp_target(emo_label, logit_text_removed).detach().cpu().numpy())
                 results["tcp_TA"].extend(get_tcp_target(emo_label, logit_visual_removed).detach().cpu().numpy())
                 results["tcp_TV"].extend(get_tcp_target(emo_label, logit_audio_removed).detach().cpu().numpy())
-                results["tcp_T"].extend(get_tcp_target(emo_label, logit_only_visual).detach().cpu().numpy())
-                results["tcp_V"].extend(get_tcp_target(emo_label, logit_only_audio).detach().cpu().numpy())
-                results["tcp_A"].extend(get_tcp_target(emo_label, logit_only_text).detach().cpu().numpy())
+                results["tcp_T"].extend(get_tcp_target(emo_label, logit_only_text).detach().cpu().numpy())
+                results["tcp_V"].extend(get_tcp_target(emo_label, logit_only_visual).detach().cpu().numpy())
+                results["tcp_A"].extend(get_tcp_target(emo_label, logit_only_audio).detach().cpu().numpy())
 
 
                 # result["id"] = ids[0]
