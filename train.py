@@ -88,6 +88,7 @@ def main():
             trained_confidnet = load_model(train_config, confidNet=True)
         except:
             confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero)
+            confidnet_trainer.build()
             trained_confidnet = confidnet_trainer.train()
         
         solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, \

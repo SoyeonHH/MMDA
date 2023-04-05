@@ -71,9 +71,7 @@ class ConfidNet_Trainer(object):
     
     def build(self):
         if self.model is None:
-            self.model = getattr(models, self.config.model)(self.config)
             self.model = load_model(self.config)
-            self.model = self.model.to(self.device)
 
         self.model.eval()
 
@@ -97,7 +95,6 @@ class ConfidNet_Trainer(object):
 
     def train(self):
         print("Training Confidence Network...")
-        self.build()
         self.confidnet.train()
         train_results = []
         best_valid_loss = float('inf')
