@@ -31,8 +31,8 @@ from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
 import config as config
-from MISA.utils.tools import *
-from MISA.utils.eval import *
+from utils.tools import *
+from utils.eval import *
 from MISA.utils.functions import *
 import time
 import datetime
@@ -52,32 +52,33 @@ import MISA.models as models
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 class Inference(object):
-    def __init__(self, config, dataloader, model=None, loaded_model=None, confidence_model=None, checkpoint=None, dkt=False):
+    def __init__(self, config, dataloader, model=None, confidence_model=None, checkpoint=None, dkt=False):
         self.config = config
         self.dataloader = dataloader
-        self.confidence_model = confidence_model
         self.checkpoint = checkpoint
         self.dkt = dkt
         self.device = torch.device(config.device)
 
-        self.model = getattr(models, config.model)(config)
         if model is None:
+            self.model = getattr(models, config.model)(config)
             if dkt:
-                self.model.load_state_dict(load_model(config, name=config.model, dynamicKT=True))
+                self.model.load_state_dict(load_model(config, dynamicKT=True))
             else:
-                self.model.load_state_dict(load_model(config, name=config.model))
+                self.model.load_state_dict(load_model(config))
         else:
-            self.model.load_state_dict(model)
+            self.model = model
             
         self.model = self.model.to(self.device)
         
 
-        if self.confidence_model is None and config.use_confidNet:
+        if confidence_model is None and config.use_confidNet:
             self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.config, self.config.hidden_size*6, \
                 num_classes=1, dropout=self.config.conf_dropout)
-            self.confidence_model.load_state_dict(load_model(config, name=self.config.model, confidNet=True))
-
-            self.confidence_model = self.confidence_model.to(self.device)
+            self.confidence_model.load_state_dict(load_model(config, confidNet=True))
+        else:
+            self.confidence_model = confidence_model
+        
+        self.confidence_model = self.confidence_model.to(self.device)
         
         
     

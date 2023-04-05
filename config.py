@@ -99,11 +99,16 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
     parser.add_argument('--weight_decay', type=float, default=0.1)
-    parser.add_argument("--local_rank", default=0, type=int, help="distribted training") 
+    parser.add_argument("--local_rank", default=0, type=int, help="distribted training")
+    parser.add_argument('--seed', type=int, default=42)
 
     parser.add_argument('--extractor', type=str, default='lstm', help='one of {lstm, trasformer}')
     parser.add_argument('--rnncell', type=str, default='lstm')
-    parser.add_argument('--embedding_size', type=int, default=300)
+
+    parser.add_argument('--embedding_size', type=int, default=300, help='text_feature_dimenstion')
+    parser.add_argument('--video_dim', type=int, default=35, help='video_feature_dimenstion')
+    parser.add_argument('--audio_dim', type=int, default=74, help='audio_feature_dimenstion')
+
     parser.add_argument('--hidden_size', type=int, default=128)
     parser.add_argument('--dropout', type=float, default=0.6)
     parser.add_argument('--reverse_grad_weight', type=float, default=1.0)
@@ -111,11 +116,30 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--activation', type=str, default='leakyrelu')
     parser.add_argument('--threshold', type=float, default=0.35)
 
-    # Train  MISA
+    # Train MISA
     parser.add_argument('--diff_weight', type=float, default=0.3)   # beta
     parser.add_argument('--sim_weight', type=float, default=0.7)    # alpha
     parser.add_argument('--sp_weight', type=float, default=0.0)
     parser.add_argument('--recon_weight', type=float, default=0.7)  # gamma 
+
+    # Train TAILOR
+    parser.add_argument('--max_words', type=int, default=60, help='')
+    parser.add_argument('--max_frames', type=int, default=60, help='')
+    parser.add_argument('--max_sequence', type=int, default=60, help='')
+    parser.add_argument('--max_label', type=int, default=6, help='')
+    parser.add_argument("--bert_model", default="bert-base", type=str, required=False, help="Bert module")
+    parser.add_argument("--visual_model", default="visual-base", type=str, required=False, help="Visual module")
+    parser.add_argument("--audio_model", default="audio-base", type=str, required=False, help="Audio module")
+    parser.add_argument("--cross_model", default="cross-base", type=str, required=False, help="Cross module")
+    parser.add_argument("--decoder_model", default="decoder-base", type=str, required=False, help="Decoder module")
+    parser.add_argument("--init_model", default=None, type=str, required=False, help="Initial model.") 
+    parser.add_argument("--warmup_proportion", default=0.1, type=float,
+                        help="Proportion of training to perform linear learning rate warmup for. E.g., 0.1 = 10%% of training.")
+    parser.add_argument('--bert_num_hidden_layers', type=int, default=6, help="Layer NO. of visual.")
+    parser.add_argument('--visual_num_hidden_layers', type=int, default=3, help="Layer NO. of visual.")
+    parser.add_argument('--audio_num_hidden_layers', type=int, default=3, help="Layer No. of audio")
+    parser.add_argument('--cross_num_hidden_layers', type=int, default=3, help="Layer NO. of cross.")
+    parser.add_argument('--decoder_num_hidden_layers', type=int, default=1, help="Layer NO. of decoder.")
 
     # Train DKT
     parser.add_argument('--use_kt', type=str2bool, default=True)

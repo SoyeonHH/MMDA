@@ -9,7 +9,6 @@ from tqdm import tqdm
 
 from config import get_config, activation_dict
 from data_loader import get_loader
-from MISA.utils.tools import *
 from transformers import BertTokenizer
 
 import torch
@@ -17,8 +16,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
-from MISA.utils.tools import *
-from MISA.utils.eval_metrics import *
+from utils.tools import *
+from utils.eval_metrics import *
 from MISA.utils.functions import *
 import time
 import datetime
@@ -73,7 +72,7 @@ class ConfidNet_Trainer(object):
     def build(self):
         if self.model is None:
             self.model = getattr(models, self.config.model)(self.config)
-            self.model.load_state_dict(load_model(self.config, name=self.config.model))
+            self.model.load_state_dict(load_model(self.config))
             self.model = self.model.to(self.device)
 
         self.model.eval()
@@ -163,7 +162,7 @@ class ConfidNet_Trainer(object):
                 best_valid_loss = valid_loss
                 best_epoch = epoch
                 print("Saving the best model...")
-                save_model(self.config, self.confidnet, name=self.config.model, confidNet=True)
+                save_model(self.config, self.confidnet, confidNet=True)
 
             wandb.log({"train_loss": train_avg_loss, "valid_loss": valid_loss})
 

@@ -10,7 +10,6 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 from transformers import BertModel, BertConfig
 from sklearn.preprocessing import MinMaxScaler
 
-from MISA.utils import to_gpu, to_cpu, DiffLoss, MSE, SIMSE, CMD
 from MISA.utils.functions import *
 from MISA.utils import ReverseLayerF, getBinaryTensor
 
@@ -26,29 +25,6 @@ class EmotionClassifier(nn.Module):
         out = self.dropout(out)
         out = self.activation(out)
         return out
-
-class ConfidenceRegressionNetwork(nn.Module):
-    def __init__(self, config, input_dims, num_classes=1, dropout=0.1):
-        super(ConfidenceRegressionNetwork, self).__init__()
-        self.config = config
-        self.mlp = nn.Sequential(
-            nn.Linear(input_dims, 128),
-            nn.ReLU(),
-            nn.BatchNorm1d(128),
-            nn.Dropout(dropout),
-            nn.Linear(128, num_classes))
-
-        # Transform features by scaling them to [0, 1]
-        self.scaler = MinMaxScaler()
-    
-    def forward(self, seq_input):
-        out = self.mlp(seq_input)
-
-        self.scaler.fit(out.cpu().detach().numpy())
-        scaled_out = self.scaler.transform(out.cpu().detach().numpy())
-        scaled_out = torch.from_numpy(scaled_out).to(self.config.device).squeeze()
-
-        return out, scaled_out
 
 class MISA(nn.Module):
     """MISA model for CMU-MOSEI emotion multi-label classification"""
@@ -186,7 +162,6 @@ class MISA(nn.Module):
         self.sp_discriminator = nn.Sequential()
         self.sp_discriminator.add_module('sp_discriminator_layer_1', nn.Linear(in_features=config.hidden_size, out_features=4))
 
-        self.confidence = ConfidenceRegressionNetwork(config, config.hidden_size*6)
         self.classifier = EmotionClassifier(config.hidden_size*6, num_classes=output_size,dropout=dropout_rate)
         self.tlayer_norm = nn.LayerNorm((hidden_sizes[0]*2,))
         self.vlayer_norm = nn.LayerNorm((hidden_sizes[1]*2,))

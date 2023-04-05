@@ -14,8 +14,8 @@ from data_loader import get_loader
 from solver import Solver
 from confidNet import ConfidNet_Trainer
 from inference import Inference
-from MISA.utils.tools import *
-from MISA.utils.eval_metrics import *
+from utils.tools import *
+from utils.eval_metrics import *
 
 import torch
 import torch.nn as nn
@@ -41,7 +41,7 @@ def main():
 
     # Setting training log
     args = get_config()
-    wandb.init(project="MISA-classification")
+    wandb.init(project="MMDA")
     wandb.config.update(args)
 
     # Setting random seed
@@ -71,10 +71,9 @@ def main():
     solver.build()
 
     try:
-        model = load_model(args, name=args.model)
+        model = load_model(train_config)
     except:
-        solver.train()
-        model = solver.model.state_dict()
+        model = solver.train()
 
     tester = Inference(test_config, test_data_loader, model=model)
     tester.inference()
@@ -86,16 +85,15 @@ def main():
         test_data_loader_nonzero = get_loader(test_config, shuffle = False, zero_label_process=True)
 
         try:
-            trained_confidnet = load_model(args, name=args.model, confidNet=True)
+            trained_confidnet = load_model(train_config, confidNet=True)
         except:
             confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero)
             trained_confidnet = confidnet_trainer.train()
-            trained_confidnet = trained_confidnet.state_dict()
         
-        solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
-        solver_dkt_tcp.build(pretrained_model=model, confidnet=trained_confidnet)
+        solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, \
+                                model=model, confidnet=trained_confidnet)
+        solver_dkt_tcp.build()
         model = solver_dkt_tcp.train(additional_training=True)
-        model = model.state_dict()
 
         tester = Inference(test_config, test_data_loader, model=model, dkt=True)
         tester.inference()

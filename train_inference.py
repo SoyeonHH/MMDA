@@ -11,7 +11,6 @@ from data_loader import get_loader
 from solver import Solver
 #from solver_dkt_ce import Solver
 from inference import Inference
-from MISA.utils.tools import *
 from transformers import BertTokenizer
 
 import torch
@@ -20,8 +19,8 @@ from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
 import config
-from MISA.utils.tools import *
-from MISA.utils.eval_metrics import *
+from utils.tools import *
+from utils.eval_metrics import *
 import time
 import datetime
 import wandb
