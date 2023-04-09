@@ -114,11 +114,11 @@ class TAILORPreTrainedModel(PreTrainedModel, nn.Module):
 class NormalizeText(nn.Module):   
     def __init__(self, task_config):
         super(NormalizeText, self).__init__()
-        self.text_norm2d = LayerNorm(task_config.text_dim)
+        self.text_norm2d = LayerNorm(task_config.embedding_size)
 
     def forward(self, text):
         text = torch.as_tensor(text).float()
-        text = text.view(-1, text.shape[-2], text.shape[-1])
+        text = text.view(text.shape[1], text.shape[0], -1)
         text = self.text_norm2d(text)
         return text  
 
@@ -129,7 +129,7 @@ class NormalizeVideo(nn.Module):
 
     def forward(self, visual):
         visual = torch.as_tensor(visual).float()
-        visual = visual.view(-1, visual.shape[-2], visual.shape[-1])
+        visual = visual.view(visual.shape[1], visual.shape[0], -1)
         visual = self.visual_norm2d(visual)
         return visual 
 
@@ -140,9 +140,9 @@ class NormalizeAudio(nn.Module):
 
     def forward(self, audio):
         audio = torch.as_tensor(audio).float()
-        audio = audio.view(-1, audio.shape[-2], audio.shape[-1])
+        audio = audio.view(audio.shape[1], audio.shape[0], -1)
         audio = self.audio_norm2d(audio)
-        return audio  #输出：[B, L, D]
+        return audio  # [B, L, D]
 
 def show_log(task_config, info):
     if task_config is None or task_config.local_rank == 0:
@@ -234,6 +234,7 @@ class TAILOR(TAILORPreTrainedModel):
         )
 
         self.cross_classifier = EmotionClassifier(cross_config.hidden_size, 1) 
+        self.text_embed = nn.Embedding(len(task_config.word2id), task_config.embedding_size)
         self.text_norm = NormalizeText(task_config)   
         self.visual_norm = NormalizeVideo(task_config)
         self.audio_norm = NormalizeAudio(task_config)
@@ -247,7 +248,7 @@ class TAILOR(TAILORPreTrainedModel):
         self.apply(self.init_weights)
 
     def forward(self, text, text_mask, visual, visual_mask, audio, audio_mask, 
-                label_input, label_mask, groundTruth_labels=None, training=True):
+                label_input, label_mask, groundTruth_labels=None, masked_modality=None, dynamic_weight=None, training=True):
         """
         text: [B, L, Dt]
         visual: [B, L, Dv]
@@ -258,9 +259,13 @@ class TAILOR(TAILORPreTrainedModel):
         batch = text.size(0)
         label_input = label_input.repeat(batch, 1)
         label_mask = label_mask.unsqueeze(0).repeat(batch, 1)
+        text = self.text_embed(text)
         text = self.text_norm(text)
+        text_mask = text_mask.view(text_mask.shape[-1], text_mask.shape[0])
         visual = self.visual_norm(visual)  
+        visual_mask = torch.ones(visual.size(0), visual.size(1)).to(self.task_config.device)
         audio = self.audio_norm(audio)
+        audio_mask = torch.ones(audio.size(0), audio.size(1)).to(self.task_config.device)
         # ========> aligned
         if self.aligned == False:
             visual, v2t_position = self.v2t_ctc(visual)
@@ -275,6 +280,18 @@ class TAILOR(TAILORPreTrainedModel):
         common_text = self.common_feature_extractor(text_output)
         common_visual = self.common_feature_extractor(visual_output)
         common_audio = self.common_feature_extractor(audio_output)
+
+        # Modalilty masking before fusion with zero padding
+        if masked_modality is not None:
+            if "text" in masked_modality:
+                private_text = torch.zeros_like(private_text)
+                common_text = torch.zeros_like(common_text)
+            if "video" in masked_modality:
+                private_visual = torch.zeros_like(private_visual)
+                common_visual = torch.zeros_like(common_visual)
+            if "audio" in masked_modality:
+                private_audio = torch.zeros_like(private_audio)
+                common_audio = torch.zeros_like(common_audio)
 
         common_feature = common_text + common_visual + common_audio 
         # <========= common and private feature extractor
@@ -332,9 +349,11 @@ class TAILOR(TAILORPreTrainedModel):
             else:
                 all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss  + 0.5 * ctc_loss
 
-            return  all_loss, predict_labels, groundTruth_labels, predict_scores
+            loss = all_loss
         else:
-            return predict_labels, groundTruth_labels, predict_scores
+            loss = self.ml_loss(predict_scores, groundTruth_labels)
+        
+        return loss, predict_scores, predict_labels, decoder_output
 
 
     def get_text_visual_audio_output(self, text, text_mask, visual, visual_mask, audio, audio_mask):

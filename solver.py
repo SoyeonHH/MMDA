@@ -106,9 +106,7 @@ class Solver(object):
             self.optimizer = self.train_config.optimizer(
                 filter(lambda p: p.requires_grad, self.model.parameters()),
                 lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
-            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5, verbose=True, min_lr=1e-6)
 
-    # @time_desc_decorator('Training Start!')
     def train(self, additional_training=False):
         curr_patience = patience = self.train_config.patience
         num_trials = 1
@@ -118,7 +116,7 @@ class Solver(object):
         lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.5)
         
         train_losses = []
-        # total_start = time.time()
+        total_start = time.time()
 
         if additional_training:
             print("Training the fusion model with dynamic weighted kt...")
@@ -132,9 +130,10 @@ class Solver(object):
             train_loss = []
 
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
-                self.model.zero_grad()
+                # self.model.zero_grad()
+                self.optimizer.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
-                    _, _, _, _, _ = batch
+                    visual_mask, audio_mask, text_mask, labels_embedding, label_mask = batch
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -147,19 +146,28 @@ class Solver(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
+                visual_mask, audio_mask, text_mask, labels_embedding, label_mask = \
+                    to_gpu(visual_mask), to_gpu(audio_mask), to_gpu(text_mask), to_gpu(labels_embedding), to_gpu(label_mask)
 
                 # Dynamic weighted kt
                 if self.train_config.kt_model == "Dynamic-tcp" and additional_training:
-                    dynamic_weight = self.get_dynamic_tcp(t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask)
+                    dynamic_weight = self.get_dynamic_tcp(t, v, a, y, \
+                            emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, \
+                                visual_mask, audio_mask, text_mask, labels_embedding, label_mask)
                 elif self.train_config.kt_model == "Dynamic-ce":
-                    dynamic_weight = self.get_dynamic_ce(t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask)
+                    dynamic_weight = self.get_dynamic_ce(t, v, a, y, \
+                            emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, \
+                                visual_mask, audio_mask, text_mask, labels_embedding, label_mask)
                 else:
                     dynamic_weight = None
 
-                loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
-                        dynamic_weights=dynamic_weight, training=True)
-                # y_tilde = y_tilde.squeeze()
+                if self.train_config.model == "MISA":
+                    loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
+                            dynamic_weights=dynamic_weight, training=True)
+                elif self.train_config.model == "TAILOR":
+                    loss, y_tilde, predicted_labels, _ = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=dynamic_weight, training=True)
 
                 loss.backward()
                 
@@ -243,11 +251,10 @@ class Solver(object):
             )
 
         ##########################################
-        # Test
+        # Report best model results
         ##########################################
 
         print("model training is finished.")
-        train_loss, acc, test_preds, test_truths = self.eval(mode="test", to_print=True)
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         eval_values_best = get_metrics(best_truths, best_results, average=self.train_config.eval_mode)
@@ -257,15 +264,21 @@ class Solver(object):
         print(f'F1 score: {best_f1}')
         print(f'Precision: {best_precision}')
         print(f'Recall: {best_recall}')
-        # total_end = time.time()
-        # total_duration = total_end - total_start
-        # print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
+        total_end = time.time()
+        total_duration = total_end - total_start
+        print(f"Total training time: {total_duration}s, {datetime.timedelta(seconds=total_duration)}")
 
         return self.model
 
     
     def eval(self,mode=None, to_print=False):
         assert(mode is not None)
+
+        if hasattr(self.model, 'module'):
+            self.model = self.model.module.to(self.device)
+        else:
+            self.model = self.model.to(self.device)
+
         self.model.eval()
 
         y_true, y_pred = [], []
@@ -287,7 +300,7 @@ class Solver(object):
                 self.model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
-                    _, _, _, _, _ = batch
+                    visual_mask, audio_mask, text_mask, labels_embedding, label_mask = batch
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -299,10 +312,16 @@ class Solver(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
+                visual_mask, audio_mask, text_mask, labels_embedding, label_mask = \
+                    to_gpu(visual_mask), to_gpu(audio_mask), to_gpu(text_mask), to_gpu(labels_embedding), to_gpu(label_mask)
 
-                loss, predicted_scores, predicted_labels, hidden_state = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, \
-                               masked_modality=None, training=False)
+                if self.train_config.model == "MISA":
+                    loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
+                            dynamic_weights=None, training=True)
+                elif self.train_config.model == "TAILOR":
+                    loss, y_tilde, predicted_labels, _ = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=True)
 
                 eval_loss.append(loss.item())
 
@@ -332,39 +351,51 @@ class Solver(object):
         return labels_embedding, labels_mask
     
 
-    def get_dynamic_tcp(self, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask):
-
-        _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
-        target_tcp = get_tcp_target(emo_label, outputs)
-
-        _, tcp = self.confidnet(hidden_state, target_tcp)
-
-        # return the tcp for each maksed modality
-        _, _, _, z_text_removed = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
-        _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
-
-        _, _, _, z_video_removed = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
-        _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
-
-        _, _, _, z_audio_removed = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
-        _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
-
-        # _, _, _, z_only_text = self.model(t, v, a, l, \
-        #     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
-        # _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
-
-        # _, _, _, z_only_video = self.model(t, v, a, l, \
-        #     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
-        # _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
-
-        # _, _, _, z_only_audio = self.model(t, v, a, l, \
-        #     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
-        # _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
+    def get_dynamic_tcp(self, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, \
+                        visual_mask, audio_mask, text_mask, labels_embedding, label_mask):
         
+        # Get TCP for each modality
+        if self.train_config.model == "MISA":
+            _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+            target_tcp = get_tcp_target(emo_label, outputs)
+
+            _, tcp = self.confidnet(hidden_state, target_tcp)
+
+            # return the tcp for each maksed modality
+            _, _, _, z_text_removed = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
+            _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
+
+            _, _, _, z_video_removed = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
+            _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
+
+            _, _, _, z_audio_removed = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
+            _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
+        
+        elif self.train_config.model == "TAILOR":
+            _, outputs, output_labels, hidden_state = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, training=True)
+            target_tcp = get_tcp_target(emo_label, outputs)
+
+            _, tcp = self.confidnet(hidden_state, target_tcp)
+
+            # return the tcp for each maksed modality
+            _, _, _, z_text_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text"], training=True)
+            _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
+
+            _, _, _, z_video_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video"], training=True)
+            _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
+
+            _, _, _, z_audio_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["audio"], training=True)
+            _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
+
+        # Get dynamic weight
         dynamic_weight = []
 
         if self.train_config.dynamic_method == "threshold":
@@ -403,18 +434,35 @@ class Solver(object):
 
         return dynamic_weight
 
-    def get_dynamic_ce(self, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask):
-        _, prob_all, _, _ = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+    def get_dynamic_ce(self, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, \
+                       visual_mask, audio_mask, text_mask, labels_embedding, label_mask):
+
+        if self.train_config.model == "MISA":
+            _, prob_all, _, _ = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+            
+            _, prob_text_removed, _, _ = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
+
+            _, prob_video_removed, _, _ = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
+
+            _, prob_audio_removed, _, _ = self.model(t, v, a, l, \
+                bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
         
-        _, prob_text_removed, _, _ = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text", training=False)
+        elif self.train_config.model == "TAILOR":
+            _, prob_all, _, _ = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=None, training=True)
 
-        _, prob_video_removed, _, _ = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video", training=False)
-
-        _, prob_audio_removed, _, _ = self.model(t, v, a, l, \
-            bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=False)
+            _, prob_text_removed, _, _ = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text"], training=True)
+            
+            _, prob_video_removed, _, _ = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video"], training=True)
+            
+            _, prob_audio_removed, _, _ = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["audio"], training=True)
+            
         
         t_mask_loss = binary_ce(prob_all, prob_text_removed)
         v_mask_loss = binary_ce(prob_all, prob_video_removed)
@@ -498,7 +546,7 @@ class ConfidNet_Trainer(object):
                 self.optimizer.zero_grad()
 
                 actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
-                    _, _, _, _, _ = batch
+                    visual_mask, audio_mask, text_mask, labels_embedding, label_mask = batch
 
                 # batch_size = t.size(0)
                 t = to_gpu(t)
@@ -511,12 +559,18 @@ class ConfidNet_Trainer(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
+                visual_mask, audio_mask, text_mask, labels_embedding, label_mask = \
+                    to_gpu(visual_mask), to_gpu(audio_mask), to_gpu(text_mask), to_gpu(labels_embedding), to_gpu(label_mask)
 
                 # Get the output from the classification model
-                _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                if self.config.model == "MISA":
+                    _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                elif self.config.model == "TAILOR":
+                    _, outputs, output_labels, hidden_state = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=True)
+                    
                 target_tcp = get_tcp_target(emo_label, outputs)
-                
                 loss, predicts = self.confidnet(hidden_state, target_tcp)
 
                 loss.backward()
@@ -541,7 +595,7 @@ class ConfidNet_Trainer(object):
             print(f"Epoch: {epoch}, Train Loss: {train_avg_loss}")
         
             # Model Validation
-            valid_loss, _ = self.eval(mode="dev")
+            valid_loss = self.eval(mode="dev")
 
             print("-" * 100)
             print("Epochs: {}, Valid loss: {}".format(epoch, valid_loss))
@@ -558,16 +612,12 @@ class ConfidNet_Trainer(object):
 
         # Model Test
         print("Testing the model...")
-        test_loss, test_result = self.eval(mode="test")
+        test_loss = self.eval(mode="test")
         print('='*50)
         print(f'Best epoch: {best_epoch}')
         print(f'Best valid loss: {best_valid_loss}')
         print(f'Test loss: {test_loss}')
         print('='*50)
-
-        # Save the results
-        save_results(self.config, train_results, mode="train")
-        save_results(self.config, test_result, mode="test")
 
         return self.confidnet
 
@@ -575,7 +625,6 @@ class ConfidNet_Trainer(object):
     def eval(self, mode=None):
         self.confidnet.eval()
         eval_losses = []
-        eval_results = []
 
         if mode == "dev":
             dataloader = self.dev_data_loader
@@ -589,7 +638,7 @@ class ConfidNet_Trainer(object):
                 # self.confidnet.zero_grad()
 
                 actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
-                    _, _, _, _, _ = batch
+                    visual_mask, audio_mask, text_mask, labels_embedding, label_mask = batch
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -601,59 +650,21 @@ class ConfidNet_Trainer(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
+                visual_mask, audio_mask, text_mask, labels_embedding, label_mask = \
+                    to_gpu(visual_mask), to_gpu(audio_mask), to_gpu(text_mask), to_gpu(labels_embedding), to_gpu(label_mask)
 
-                _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                if self.config.model == "MISA":
+                    _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
+                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)
+                elif self.config.model == "TAILOR":
+                    _, outputs, output_labels, hidden_state = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=True)
+                    
                 target_tcp = get_tcp_target(emo_label, outputs)
-                
                 loss, predicts = self.confidnet(hidden_state, target_tcp)
 
                 eval_losses.append(loss.item())
 
-                if mode == "test":
-                    # return the tcp for each maksed modality
-                    _, logit_text_removed, _, z_text_removed = self.model(t, v, a, l, \
-                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
-                    _, tcp_text_removed = self.confidnet(z_text_removed, target_tcp)
-
-                    _, logit_video_removed, _, z_video_removed = self.model(t, v, a, l, \
-                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
-                    _, tcp_video_removed = self.confidnet(z_video_removed, target_tcp)
-
-                    _, logit_audio_removed, _, z_audio_removed = self.model(t, v, a, l, \
-                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
-                    _, tcp_audio_removed = self.confidnet(z_audio_removed, target_tcp)
-
-                    _, logit_only_text, _, z_only_text = self.model(t, v, a, l, \
-                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video", "audio"], training=False)
-                    _, tcp_only_text = self.confidnet(z_only_text, target_tcp)
-
-                    _, logit_only_video, _, z_only_video = self.model(t, v, a, l, \
-                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "audio"], training=False)
-                    _, tcp_only_video = self.confidnet(z_only_video, target_tcp)
-
-                    _, logit_only_audio, _, z_only_audio = self.model(t, v, a, l, \
-                        bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
-                    _, tcp_only_audio = self.confidnet(z_only_audio, target_tcp)
-
-                    for idx in range(len(ids)):
-                        eval_result = {
-                            "id": ids[idx],
-                            "input_text": actual_words[idx],
-                            "emo_label": emo_label[idx].detach().cpu().numpy(),
-                            "predict": outputs[idx].detach().cpu().numpy(),
-                            "confid_loss": loss.item(),
-                            "target_tcp": target_tcp[idx].item(),
-                            "pred_tcp": predicts[idx].item(),
-                            "tcp_VA": get_tcp_target(emo_label, logit_text_removed)[idx].item(),
-                            "tcp_TA": get_tcp_target(emo_label, logit_video_removed)[idx].item(),
-                            "tcp_TV": get_tcp_target(emo_label, logit_audio_removed)[idx].item(),
-                            "tcp_T": get_tcp_target(emo_label, logit_only_text)[idx].item(),
-                            "tcp_V": get_tcp_target(emo_label, logit_only_video)[idx].item(),
-                            "tcp_A": get_tcp_target(emo_label, logit_only_audio)[idx].item()
-                        }
-                        eval_results.append(eval_result)
-
         eval_avg_loss = np.mean(eval_losses)
 
-        return eval_avg_loss, eval_results
+        return eval_avg_loss
