@@ -4,3 +4,4 @@ pre_trained_models
 checkpoints
 hypertune
 *.csv
+MISA/pre_trained_models
