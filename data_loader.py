@@ -78,7 +78,7 @@ def get_loader(config, shuffle=True, zero_label_process=False):
         visual = pad_sequence([torch.FloatTensor(sample[0][1]) for sample in batch])
         acoustic = pad_sequence([torch.FloatTensor(sample[0][2]) for sample in batch])
 
-        # TODO: get modality mask for TAILOR baseline
+        # get modality mask for TAILOR baseline
         visual_mask = torch.ones_like(visual)
         audio_mask = torch.ones_like(acoustic)
         text_mask = torch.ones_like(sentences)

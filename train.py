@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader
 import warnings
 
 warnings.filterwarnings("ignore")
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 os.chdir(os.getcwd())
 torch.manual_seed(123)

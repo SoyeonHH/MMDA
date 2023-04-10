@@ -36,6 +36,7 @@ from .until_config import PretrainedConfig
 from .until_module import PreTrainedModel, LayerNorm, ACT2FN
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.ERROR)
 
 PRETRAINED_MODEL_ARCHIVE_MAP = {}
 CONFIG_NAME = 'bert_config.json'
@@ -394,10 +395,10 @@ class BertModel(PreTrainedModel):
         self.pooler = BertPooler(config)
         self.apply(self.init_weights)
 
-    def forward(self, video, attention_mask=None, output_all_encoded_layers=True):
+    def forward(self, text, attention_mask=None, output_all_encoded_layers=True):
 
         if attention_mask is None:
-            attention_mask = torch.ones(video.size(0), video.size(1))
+            attention_mask = torch.ones(text.size(0), text.size(1))
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -414,7 +415,7 @@ class BertModel(PreTrainedModel):
         extended_attention_mask = extended_attention_mask.to(dtype=self.dtype) # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        embedding_output = self.embeddings(video)
+        embedding_output = self.embeddings(text)
         encoded_layers = self.encoder(embedding_output,
                                       extended_attention_mask,
                                       output_all_encoded_layers=output_all_encoded_layers)

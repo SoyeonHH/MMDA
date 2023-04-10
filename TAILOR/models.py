@@ -255,17 +255,18 @@ class TAILOR(TAILORPreTrainedModel):
         audio: [B, L, Da]
         """
 
-        label_input = label_input.unsqueeze(0)
-        batch = text.size(0)
-        label_input = label_input.repeat(batch, 1)
-        label_mask = label_mask.unsqueeze(0).repeat(batch, 1)
         text = self.text_embed(text)
         text = self.text_norm(text)
-        text_mask = text_mask.view(text_mask.shape[-1], text_mask.shape[0])
+        text_mask = text_mask.view(text_mask.shape[-1], text_mask.shape[0]).to(self.task_config.device)
         visual = self.visual_norm(visual)  
         visual_mask = torch.ones(visual.size(0), visual.size(1)).to(self.task_config.device)
         audio = self.audio_norm(audio)
         audio_mask = torch.ones(audio.size(0), audio.size(1)).to(self.task_config.device)
+        
+        label_input = label_input.unsqueeze(0)
+        batch = text.size(0)
+        label_input = label_input.repeat(batch, 1)
+        label_mask = label_mask.unsqueeze(0).repeat(batch, 1)
         # ========> aligned
         if self.aligned == False:
             visual, v2t_position = self.v2t_ctc(visual)
@@ -377,9 +378,9 @@ class TAILOR(TAILORPreTrainedModel):
         # =============> visual audio fusion
         va_concat_features = torch.cat((audio_output, visual_output), dim=1)
         va_concat_mask = torch.cat((audio_mask, visual_mask), dim=1)
-        text_type_ = torch.zeros_like(attention_mask)
-        video_type_ = torch.ones_like(visual_mask)
-        audio_type_ =  torch.zeros_like(audio_mask)
+        text_type_ = torch.zeros_like(attention_mask, dtype=int)
+        video_type_ = torch.ones_like(visual_mask, dtype=int)
+        audio_type_ =  torch.zeros_like(audio_mask, dtype=int)
         va_concat_type = torch.cat((audio_type_, video_type_), dim=1)
         va_cross_layers, va_pooled_output = self.va_cross(va_concat_features, va_concat_type, va_concat_mask)
         va_cross_output = va_cross_layers[-1]
@@ -388,7 +389,7 @@ class TAILOR(TAILORPreTrainedModel):
         # =============> VisualAudio and text fusion
         vat_concat_features = torch.cat((sequence_output, va_cross_output), dim=1)
         vat_concat_mask = torch.cat((attention_mask, va_concat_mask), dim=1)
-        va_type_ = torch.ones_like(va_concat_mask)
+        va_type_ = torch.ones_like(va_concat_mask, dtype=int)
         vat_concat_type = torch.cat((text_type_, va_type_), dim=1)
         vat_cross_layers, vat_pooled_output = self.vat_cross(vat_concat_features, vat_concat_type, vat_concat_mask)
         vat_cross_output = vat_cross_layers[-1]
@@ -396,8 +397,8 @@ class TAILOR(TAILORPreTrainedModel):
 
         # =============> private common fusion
         pc_concate_features = torch.cat((vat_cross_output, common_feature), dim=1)
-        specific_type = torch.zeros_like(vat_concat_mask)
-        common_type = torch.ones_like(common_mask)
+        specific_type = torch.zeros_like(vat_concat_mask, dtype=int)
+        common_type = torch.ones_like(common_mask, dtype=int)
         pc_concate_type = torch.cat((specific_type, common_type), dim=1)
         pc_concat_mask = torch.cat((vat_concat_mask, common_mask), dim=1)
         pc_cross_layers, pc_pooled_output = self.pc_cross(pc_concate_features, pc_concate_type, pc_concat_mask)
