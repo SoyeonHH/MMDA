@@ -51,7 +51,7 @@ class EarlyFusion(nn.Module):
         self.video_hidden = hidden_dims[1]
         self.audio_hidden = hidden_dims[2]
 
-        self.text_out = text_out
+        self.text_out = 768 if self.config.use_bert else text_out
         self.post_fusion_dim = post_fusion_dim
 
         self.text_dropout = dropouts[0]
@@ -80,11 +80,17 @@ class EarlyFusion(nn.Module):
 
         # define the post-fusion layers
         self.post_fusion_dropout = nn.Dropout(p=self.post_fusion_dropout)
-        self.post_fusion_layer_1 = nn.Linear(self.text_out + self.video_hidden + self.audio_hidden, self.post_fusion_dim)    # Concatenation
+        if self.config.use_bert:
+            self.post_fusion_layer_1 = nn.Linear(768 + 4*self.video_hidden + 4*self.audio_hidden, self.post_fusion_dim)
+        else:
+            self.post_fusion_layer_1 = nn.Linear(4*self.text_out + 4*self.video_hidden + 4*self.audio_hidden, self.post_fusion_dim)
         self.post_fusion_layer_2 = nn.Linear(self.post_fusion_dim, self.post_fusion_dim)
         
         # define the classifier
         self.classifier = EmotionClassifier(self.post_fusion_dim, config.num_classes)
+        self.tlayer_norm = nn.LayerNorm((self.text_out*2,))
+        self.vlayer_norm = nn.LayerNorm((self.video_hidden*2,))
+        self.alayer_norm = nn.LayerNorm((self.audio_hidden*2,))
     
     def extract_features(self, sequence, lengths, rnn1, rnn2, layer_norm):
         packed_sequence = pack_padded_sequence(sequence, lengths, enforce_sorted=False)
@@ -112,7 +118,7 @@ class EarlyFusion(nn.Module):
         aucoustic: (L, B, Da)
         bert_sent: (B, L)
 
-        utterence_text: (B, Dt)
+        utterence_text: (B, 2 * Dt)
         utterence_video: (B, 2 * Dv)
         utterence_audio: (B, 2 * Da)
         '''
