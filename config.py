@@ -86,13 +86,13 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--aligned', type=str2bool, default=True)
 
     # Model
-    parser.add_argument('--model', type=str, default='Early', help='one of {Early, TFN, MISA, TAILOR}')
+    parser.add_argument('--model', type=str, default='TAILOR', help='one of {Early, TFN, MISA, TAILOR}')
 
     # Train
     time_now = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     parser.add_argument('--name', type=str, default=f"{time_now}")
     parser.add_argument('--num_classes', type=int, default=6)   # Fixed to classify
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--eval_batch_size', type=int, default=10)
     parser.add_argument('--n_epoch', type=int, default=10)
     parser.add_argument('--patience', type=int, default=6)
@@ -111,7 +111,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--video_dim', type=int, default=35, help='video_feature_dimenstion')
     parser.add_argument('--audio_dim', type=int, default=74, help='audio_feature_dimenstion')
 
-    parser.add_argument('--hidden_size', type=int, default=256)
+    parser.add_argument('--hidden_size', type=int, default=128)
     parser.add_argument('--dropout', type=float, default=0.6)
     parser.add_argument('--reverse_grad_weight', type=float, default=1.0)
     # Selectin activation from 'elu', "hardshrink", "hardtanh", "leakyrelu", "prelu", "relu", "rrelu", "tanh"

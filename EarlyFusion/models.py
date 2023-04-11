@@ -52,7 +52,7 @@ class EarlyFusion(nn.Module):
         self.audio_hidden = hidden_dims[2]
 
         self.text_out = 768 if self.config.use_bert else text_out
-        self.post_fusion_dim = post_fusion_dim
+        self.post_fusion_dim = config.hidden_size
 
         self.text_dropout = dropouts[0]
         self.video_dropout = dropouts[1]

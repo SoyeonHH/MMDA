@@ -169,6 +169,8 @@ class TAILOR(TAILORPreTrainedModel):
         self.num_classes = task_config.num_classes
         self.aligned = task_config.aligned
 
+        self.task_config.hidden_size = 256
+
         assert self.task_config.max_frames <= visual_config.max_position_embeddings
         assert self.task_config.max_sequence <= audio_config.max_position_embeddings
         assert self.task_config.max_words + self.task_config.max_frames <= cross_config.max_position_embeddings
@@ -234,6 +236,7 @@ class TAILOR(TAILORPreTrainedModel):
         )
 
         self.cross_classifier = EmotionClassifier(cross_config.hidden_size, 1) 
+        self.post_hidden_layer = nn.Linear(task_config.hidden_size*6, task_config.hidden_size)
         self.text_embed = nn.Embedding(len(task_config.word2id), task_config.embedding_size)
         self.text_norm = NormalizeText(task_config)   
         self.visual_norm = NormalizeVideo(task_config)
@@ -303,12 +306,13 @@ class TAILOR(TAILORPreTrainedModel):
         # ==========> label modal alignment
         decoder_output = self.decoder(label_input, cross_output, label_mask, cross_mask)
         hidden_state = decoder_output.view(decoder_output.size(0), -1)
+        hidden_state = self.post_hidden_layer(hidden_state)
         # <========== label modal alignment
         cross_predict_scores = self.cross_classifier(decoder_output)
-        cross_predict_scores  = cross_predict_scores.view(-1, self.num_classes)     
-        predict_scores = cross_predict_scores
+        # cross_predict_scores  = cross_predict_scores.view(-1, self.num_classes)     
+        predict_scores = cross_predict_scores.squeeze()
         predict_labels = getBinaryTensor(predict_scores)
-        groundTruth_labels = groundTruth_labels.view(-1, self.num_classes)
+        # groundTruth_labels = groundTruth_labels.view(-1, self.num_classes)
                                                                   
         if training:
             text_modal = torch.zeros_like(common_mask).view(-1) #[B, L]

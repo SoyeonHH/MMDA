@@ -517,11 +517,7 @@ class ConfidNet_Trainer(object):
 
         # Initialize confidence network
         if self.confidnet is None:
-            if self.config.model == "Early" or "TFN":
-                input_dim = 32
-            elif self.config.model == "MISA" or "TAILOR":
-                input_dim = self.config.hidden_size*6
-            self.confidnet = ConfidenceRegressionNetwork(self.config, input_dims=input_dim, num_classes=1, dropout=self.config.conf_dropout)
+            self.confidnet = ConfidenceRegressionNetwork(self.config, input_dims=self.config.hidden_size, num_classes=1, dropout=self.config.conf_dropout)
             self.confidnet = self.confidnet.to(self.device)
 
         self.optimizer = torch.optim.Adam(self.confidnet.parameters(), lr=self.config.conf_lr)

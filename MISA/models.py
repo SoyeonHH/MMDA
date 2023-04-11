@@ -148,6 +148,8 @@ class MISA(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(d_model=self.config.hidden_size, nhead=2)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
 
+        self.post_fusion_layer = nn.Linear(in_features=config.hidden_size*6, out_features=config.hidden_size)
+
     def extract_features(self, sequence, lengths, rnn1, rnn2, layer_norm):
         packed_sequence = pack_padded_sequence(sequence, lengths, enforce_sorted=False)
 
@@ -255,7 +257,7 @@ class MISA(nn.Module):
         h = torch.stack((self.utt_private_t, self.utt_private_v, self.utt_private_a, self.utt_shared_t, self.utt_shared_v,  self.utt_shared_a), dim=0)
         h = self.transformer_encoder(h)
         h = torch.cat((h[0], h[1], h[2], h[3], h[4], h[5]), dim=1)
-        h_mask = torch.ones_like(h)
+        hidden_fusion = self.post_fusion_layer(h)
 
         predicted_scores = self.classifier(h)
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
@@ -285,7 +287,7 @@ class MISA(nn.Module):
         else:
             loss = cls_loss
 
-        return loss, predicted_scores, predicted_labels, h
+        return loss, predicted_scores, predicted_labels, hidden_fusion
 
 
     
