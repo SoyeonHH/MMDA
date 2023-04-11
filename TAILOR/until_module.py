@@ -19,6 +19,7 @@ import logging
 import numpy as np
 import torch
 from torch import nn
+from torch.autograd import Function, Variable
 import torch.nn.functional as F
 import math
 from .until_config import PretrainedConfig
