@@ -86,15 +86,15 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--aligned', type=str2bool, default=True)
 
     # Model
-    parser.add_argument('--model', type=str, default='TAILOR', help='one of {Early, TFN, MISA, TAILOR}')
+    parser.add_argument('--model', type=str, default='Early', help='one of {Early, TFN, MISA, TAILOR}')
 
     # Train
     time_now = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     parser.add_argument('--name', type=str, default=f"{time_now}")
     parser.add_argument('--num_classes', type=int, default=6)   # Fixed to classify
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--eval_batch_size', type=int, default=10)
-    parser.add_argument('--n_epoch', type=int, default=1)
+    parser.add_argument('--n_epoch', type=int, default=10)
     parser.add_argument('--patience', type=int, default=6)
 
     parser.add_argument('--learning_rate', type=float, default=1e-5)
@@ -148,12 +148,12 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--kt_model', type=str, 
                     default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
     parser.add_argument('--kt_weight', type=float, default=10000.0)
-    parser.add_argument('--n_epoch_dkt', type=int, default=1)
+    parser.add_argument('--n_epoch_dkt', type=int, default=30)
     parser.add_argument('--dynamic_method', type=str, default='ratio', help='one of {threshold, ratio, noise_level}')
 
     # Train ConfidNet
     parser.add_argument('--use_confidNet', type=str2bool, default=True)
-    parser.add_argument('--n_epoch_conf', type=int, default=1)
+    parser.add_argument('--n_epoch_conf', type=int, default=10)
     parser.add_argument('--conf_loss', type=str, default='mse', help='one of {mse, focal, ranking}')
     parser.add_argument('--conf_lr', type=float, default=1e-5)
     parser.add_argument('--conf_dropout', type=float, default=0.6)

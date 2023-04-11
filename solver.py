@@ -64,7 +64,7 @@ class Solver(object):
         # Prepare model
         if self.model is None:
             if self.train_config.model == "Early":
-                self.model = EarlyFusion(self.train_config, (128, 16, 4), 64, (0.3, 0.3, 0.3, 0.3), 32)
+                self.model = EarlyFusion(self.train_config, (128, 32, 32), 64, (0.3, 0.3, 0.3, 0.3), 32)
             elif self.train_config.model == "MISA":
                 self.model = MISA(self.train_config)
             elif self.train_config.model == "TAILOR":
@@ -517,9 +517,9 @@ class ConfidNet_Trainer(object):
 
         # Initialize confidence network
         if self.confidnet is None:
-            if self.config.model == "MISA":
-                input_dim = self.config.hidden_size*6
-            elif self.config.model == "TAILOR":
+            if self.config.model == "Early" or "TFN":
+                input_dim = 32
+            elif self.config.model == "MISA" or "TAILOR":
                 input_dim = self.config.hidden_size*6
             self.confidnet = ConfidenceRegressionNetwork(self.config, input_dims=input_dim, num_classes=1, dropout=self.config.conf_dropout)
             self.confidnet = self.confidnet.to(self.device)
@@ -531,6 +531,8 @@ class ConfidNet_Trainer(object):
             if self.config.pretrained_emb is not None:
                 self.model.embed.weight.data = self.config.pretrained_emb
             self.model.embed.requires_grad = False
+        
+        self.model = self.model.to(self.device)
         
 
     def train(self):
@@ -565,7 +567,7 @@ class ConfidNet_Trainer(object):
                 # Get the output from the classification model
                 if self.config.model == "TAILOR":
                     _, outputs, output_labels, hidden_state = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=False)
                 else:
                     _, outputs, output_labels, hidden_state = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, training=False)

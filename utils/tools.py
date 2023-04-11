@@ -4,6 +4,7 @@ import io
 import csv
 
 from MISA.models import MISA
+from EarlyFusion.models import EarlyFusion
 from TAILOR.models import TAILOR
 from TAILOR.file_utils import *
 from confidNet import ConfidenceRegressionNetwork
@@ -39,17 +40,24 @@ def save_model(args, model, name='', confidNet=None, dynamicKT=None):
 
 def load_model(args, name='', confidNet=None, dynamicKT=None):
     config_name = save_load_name(args, name, confidNet, dynamicKT)
+    print('loaded model: ', config_name)
 
     with open(f'pre_trained_models/best_{config_name}.pt', 'rb') as f:
         buffer = io.BytesIO(f.read())
     model_state_dict = torch.load(buffer, map_location='cpu')
 
     if confidNet==True:
-        model = ConfidenceRegressionNetwork(args, input_dims=args.hidden_size*6, num_classes=1, dropout=args.conf_dropout)
+        if args.model == "Early" or "TFN":
+            input_dim = 32
+        elif args.model == "MISA" or "TAILOR":
+            input_dim = args.hidden_size*6
+        model = ConfidenceRegressionNetwork(args, input_dims=input_dim, num_classes=1, dropout=args.conf_dropout)
         model.load_state_dict(model_state_dict)
 
     else:
-        if args.model == 'MISA':
+        if args.model == 'Early':
+            model = EarlyFusion(args, (128, 32, 32), 64, (0.3, 0.3, 0.3, 0.3), 32)
+        elif args.model == 'MISA':
             model = MISA(args)
         elif args.model == 'TAILOR':
             cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed')

@@ -70,7 +70,7 @@ class EarlyFusion(nn.Module):
         else:
             self.embed = nn.Embedding(len(config.word2id), self.text_in)
             self.trnn1 = rnn(self.text_in, self.text_hidden, bidirectional=True)
-            self.trnn2 = rnn(2*self.text_hidden, self.text_out, bidirectional=True)
+            self.trnn2 = rnn(2*self.text_hidden, self.text_hidden, bidirectional=True)
         
         self.vrnn1 = rnn(self.video_in, self.video_hidden, bidirectional=True)
         self.vrnn2 = rnn(2*self.video_hidden, self.video_hidden, bidirectional=True)
@@ -83,12 +83,12 @@ class EarlyFusion(nn.Module):
         if self.config.use_bert:
             self.post_fusion_layer_1 = nn.Linear(768 + 4*self.video_hidden + 4*self.audio_hidden, self.post_fusion_dim)
         else:
-            self.post_fusion_layer_1 = nn.Linear(4*self.text_out + 4*self.video_hidden + 4*self.audio_hidden, self.post_fusion_dim)
+            self.post_fusion_layer_1 = nn.Linear(4*self.text_hidden + 4*self.video_hidden + 4*self.audio_hidden, self.post_fusion_dim)
         self.post_fusion_layer_2 = nn.Linear(self.post_fusion_dim, self.post_fusion_dim)
         
         # define the classifier
         self.classifier = EmotionClassifier(self.post_fusion_dim, config.num_classes)
-        self.tlayer_norm = nn.LayerNorm((self.text_out*2,))
+        self.tlayer_norm = nn.LayerNorm((self.text_hidden*2,))
         self.vlayer_norm = nn.LayerNorm((self.video_hidden*2,))
         self.alayer_norm = nn.LayerNorm((self.audio_hidden*2,))
     
@@ -154,6 +154,14 @@ class EarlyFusion(nn.Module):
         final_h1a, final_h2a = self.extract_features(acoustic, lengths, self.arnn1, self.arnn2, self.alayer_norm)
         utterance_audio = torch.cat((final_h1a, final_h2a), dim=2).permute(1, 0, 2).contiguous().view(batch_size, -1)
 
+        # modality masking
+        if masked_modality is not None:
+            if "text" in masked_modality:
+                utterance_text = torch.zeros_like(utterance_text)
+            if "video" in masked_modality:
+                utterance_video = torch.zeros_like(utterance_video)
+            if "audio" in masked_modality:
+                utterance_audio = torch.zeros_like(utterance_audio)
 
         # concatenate the outputs of the subnetworks
         h = torch.cat((utterance_text, utterance_video, utterance_audio), dim=1)
@@ -177,6 +185,6 @@ class EarlyFusion(nn.Module):
         else:
             loss = cls_loss
         
-        return loss, predicted_scores, predicted_labels, h
+        return loss, predicted_scores, predicted_labels, h_2
 
         
