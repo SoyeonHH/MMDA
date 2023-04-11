@@ -44,30 +44,23 @@ class MISA(nn.Module):
         self.tanh = nn.Tanh()
 
         ## Initialize the model
+        rnn = nn.LSTM if self.config.rnncell == 'lstm' else nn.GRU
 
-        if self.config.extractor == 'transformer':
-            # TODO: Implement transformer encoder for feature extractors
-            print("To do implement tranformer encoder")
-            exit()
+        if self.config.use_bert:
 
+            # Initializing a BERT bert-base-uncased style configuration
+            bertconfig = BertConfig.from_pretrained('bert-base-uncased', output_hidden_states=True)
+            self.bertmodel = BertModel.from_pretrained('bert-base-uncased', config=bertconfig)
         else:
-            rnn = nn.LSTM if self.config.rnncell == 'lstm' else nn.GRU
-
-            if self.config.use_bert:
-
-                # Initializing a BERT bert-base-uncased style configuration
-                bertconfig = BertConfig.from_pretrained('bert-base-uncased', output_hidden_states=True)
-                self.bertmodel = BertModel.from_pretrained('bert-base-uncased', config=bertconfig)
-            else:
-                self.embed = nn.Embedding(len(config.word2id), input_sizes[0])
-                self.trnn1 = rnn(input_sizes[0], hidden_sizes[0], bidirectional=True)
-                self.trnn2 = rnn(2*hidden_sizes[0], hidden_sizes[0], bidirectional=True)
-            
-            self.vrnn1 = rnn(input_sizes[1], hidden_sizes[1], bidirectional=True)
-            self.vrnn2 = rnn(2*hidden_sizes[1], hidden_sizes[1], bidirectional=True)
-            
-            self.arnn1 = rnn(input_sizes[2], hidden_sizes[2], bidirectional=True)
-            self.arnn2 = rnn(2*hidden_sizes[2], hidden_sizes[2], bidirectional=True)
+            self.embed = nn.Embedding(len(config.word2id), input_sizes[0])
+            self.trnn1 = rnn(input_sizes[0], hidden_sizes[0], bidirectional=True)
+            self.trnn2 = rnn(2*hidden_sizes[0], hidden_sizes[0], bidirectional=True)
+        
+        self.vrnn1 = rnn(input_sizes[1], hidden_sizes[1], bidirectional=True)
+        self.vrnn2 = rnn(2*hidden_sizes[1], hidden_sizes[1], bidirectional=True)
+        
+        self.arnn1 = rnn(input_sizes[2], hidden_sizes[2], bidirectional=True)
+        self.arnn2 = rnn(2*hidden_sizes[2], hidden_sizes[2], bidirectional=True)
 
 
         ##########################################
@@ -93,20 +86,6 @@ class MISA(nn.Module):
         self.project_a.add_module('project_a', nn.Linear(in_features=hidden_sizes[2]*4, out_features=config.hidden_size))
         self.project_a.add_module('project_a_activation', self.activation)
         self.project_a.add_module('project_a_layer_norm', nn.LayerNorm(config.hidden_size))
-
-
-        ##########################################
-        # unimodal classifiers
-        ##########################################
-        # if self.config.freeze == 'False':
-        #     self.classifier_t = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
-        #     self.classifier_v = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
-        #     self.classifier_a = EmotionClassifier(config.hidden_size, num_classes=output_size,dropout=0.1)
-
-
-        # self.confid_t = ConfidenceRegressionNetwork(config.hidden_size)
-        # self.confid_v = ConfidenceRegressionNetwork(config.hidden_size)
-        # self.confid_a = ConfidenceRegressionNetwork(config.hidden_size)
 
 
 
@@ -279,7 +258,6 @@ class MISA(nn.Module):
         h = torch.cat((h[0], h[1], h[2], h[3], h[4], h[5]), dim=1)
         h_mask = torch.ones_like(h)
 
-        # decoder_output = self.decoder(label_input, h, label_mask, h_mask)
         predicted_scores = self.classifier(h)
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
