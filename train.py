@@ -1,11 +1,6 @@
 import os
-import sys
-import math
-from pyexpat import model
 import numpy as np
 from random import random
-import time
-import datetime
 import wandb
 from transformers import BertTokenizer
 
@@ -31,9 +26,6 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 os.chdir(os.getcwd())
 torch.manual_seed(123)
 torch.cuda.manual_seed_all(123)
-
-from MISA.utils import to_gpu, to_cpu, time_desc_decorator, DiffLoss, MSE, SIMSE, CMD
-import MISA.models as models
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
@@ -71,9 +63,9 @@ def main():
     solver.build()
 
     # try:
-    model = load_model(train_config)
+    #     model = load_model(train_config)
     # except:
-    #     model = solver.train()
+    model = solver.train()
 
     tester = Inference(test_config, test_data_loader, model=model)
     tester.inference()
@@ -84,12 +76,12 @@ def main():
         dev_data_loader_nonzero = get_loader(dev_config, shuffle = False, zero_label_process=True)
         test_data_loader_nonzero = get_loader(test_config, shuffle = False, zero_label_process=True)
 
-        try:
-            trained_confidnet = load_model(train_config, confidNet=True)
-        except:
-            confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero, model=model)
-            confidnet_trainer.build()
-            trained_confidnet = confidnet_trainer.train()
+        # try:
+        #     trained_confidnet = load_model(train_config, confidNet=True)
+        # except:
+        confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero, model=model)
+        confidnet_trainer.build()
+        trained_confidnet = confidnet_trainer.train()
         
         solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True, \
                                 model=model, confidnet=trained_confidnet)

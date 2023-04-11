@@ -59,12 +59,14 @@ class Inference(object):
 
         if model is None:
             if self.model is None:
-                if self.config.model == "MISA":
-                    self.model = MISA(self.config)
-                elif self.config.model == "TAILOR":
-                    self.model = TAILOR.from_pretrained(self.config.bert_model, \
-                            self.config.visual_model, self.config.audio_model, self.config.cross_model, \
-                                self.config.decoder_model, task_config=self.config)
+                if config.model == "Early":
+                    self.model = EarlyFusion(config, (128, 16, 4), 64, (0.3, 0.3, 0.3, 0.3), 32)
+                elif config.model == "MISA":
+                    self.model = MISA(config)
+                elif config.model == "TAILOR":
+                    self.model = TAILOR.from_pretrained(config.bert_model, \
+                            config.visual_model, config.audio_model, config.cross_model, \
+                                config.decoder_model, task_config=config)
             if dkt:
                 self.model = load_model(config, dynamicKT=True)
             else:
@@ -114,14 +116,14 @@ class Inference(object):
                 visual_mask, audio_mask, text_mask, labels_embedding, label_mask = \
                     to_gpu(visual_mask), to_gpu(audio_mask), to_gpu(text_mask), to_gpu(labels_embedding), to_gpu(label_mask)
 
-                if self.config.model == "MISA":
+                if self.config.model == "TAILOR":
+                    loss, predicted_scores, predicted_labels, hidden_state = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=False)
+                else:
                     loss, predicted_scores, predicted_labels, hidden_state = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
                             dynamic_weights=None, training=False)
-                elif self.config.model == "TAILOR":
-                    loss, predicted_scores, predicted_labels, hidden_state = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=False)
-
+                
                 eval_loss.append(loss.item())
                 y_true.append(emo_label.cpu().numpy())
                 y_pred.append(predicted_labels.cpu().numpy())
@@ -229,7 +231,26 @@ class Inference(object):
     def get_masking_results(self, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, \
                         visual_mask, audio_mask, text_mask, labels_embedding, label_mask):
         
-        if self.config.model == "MISA":
+        if self.config.model == "TAILOR":
+            _, logit_text_removed, pred_text_removed, z_text_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text"], training=False)
+
+            _, logit_visual_removed, pred_visual_removed, z_visual_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video"], training=False)
+            
+            _, logit_audio_removed, pred_audio_removed, z_audio_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["audio"], training=False)
+            
+            _, logit_only_text, pred_only_text, z_only_text = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video", "audio"], training=False)
+            
+            _, logit_only_visual, pred_only_visual, z_only_visual = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "audio"], training=False)
+            
+            _, logit_only_audio, pred_only_audio, z_only_audio = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "video"], training=False)
+        
+        else:
             _, logit_text_removed, pred_text_removed, z_text_removed = self.model(t, v, a, l, \
                 bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
             
@@ -248,34 +269,16 @@ class Inference(object):
             _, logit_only_audio, pred_only_audio, z_only_audio = self.model(t, v, a, l, \
                 bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
 
-        elif self.config.model == "TAILOR":
-            _, logit_text_removed, pred_text_removed, z_text_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text"], training=False)
-
-            _, logit_visual_removed, pred_visual_removed, z_visual_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video"], training=False)
             
-            _, logit_audio_removed, pred_audio_removed, z_audio_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["audio"], training=False)
-            
-            _, logit_only_text, pred_only_text, z_only_text = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video", "audio"], training=False)
-            
-            _, logit_only_visual, pred_only_visual, z_only_visual = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "audio"], training=False)
-            
-            _, logit_only_audio, pred_only_audio, z_only_audio = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "video"], training=False)
-            
-            pred_list = [pred_text_removed, pred_visual_removed, pred_audio_removed, pred_only_text, pred_only_visual, pred_only_audio]
-            tcp_list = [
-                get_tcp_target(emo_label, logit_text_removed),
-                get_tcp_target(emo_label, logit_visual_removed),
-                get_tcp_target(emo_label, logit_audio_removed),
-                get_tcp_target(emo_label, logit_only_text),
-                get_tcp_target(emo_label, logit_only_visual),
-                get_tcp_target(emo_label, logit_only_audio)
-            ]
+        pred_list = [pred_text_removed, pred_visual_removed, pred_audio_removed, pred_only_text, pred_only_visual, pred_only_audio]
+        tcp_list = [
+            get_tcp_target(emo_label, logit_text_removed),
+            get_tcp_target(emo_label, logit_visual_removed),
+            get_tcp_target(emo_label, logit_audio_removed),
+            get_tcp_target(emo_label, logit_only_text),
+            get_tcp_target(emo_label, logit_only_visual),
+            get_tcp_target(emo_label, logit_only_audio)
+        ]
 
         return pred_list, tcp_list
 
