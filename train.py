@@ -71,9 +71,9 @@ def main():
     solver.build()
 
     # try:
-    #     model = load_model(train_config)
+    model = load_model(train_config)
     # except:
-    model = solver.train()
+    #     model = solver.train()
 
     tester = Inference(test_config, test_data_loader, model=model)
     tester.inference()

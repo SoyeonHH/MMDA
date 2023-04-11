@@ -117,16 +117,16 @@ class Inference(object):
                 if self.config.model == "MISA":
                     loss, predicted_scores, predicted_labels, hidden_state = self.model(t, v, a, l, \
                         bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None, \
-                            dynamic_weights=None, training=True)
+                            dynamic_weights=None, training=False)
                 elif self.config.model == "TAILOR":
                     loss, predicted_scores, predicted_labels, hidden_state = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, dynamic_weight=None, training=False)
 
                 eval_loss.append(loss.item())
                 y_true.append(emo_label.cpu().numpy())
                 y_pred.append(predicted_labels.cpu().numpy())
 
-                pred_list, tcp_list = self.get_masking_results(self, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, \
+                pred_list, tcp_list = self.get_masking_results(t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, \
                         visual_mask, audio_mask, text_mask, labels_embedding, label_mask)
 
                 pred_va.append(pred_list[0].cpu().numpy())
@@ -250,22 +250,22 @@ class Inference(object):
 
         elif self.config.model == "TAILOR":
             _, logit_text_removed, pred_text_removed, z_text_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text"], training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text"], training=False)
 
             _, logit_visual_removed, pred_visual_removed, z_visual_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video"], training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video"], training=False)
             
             _, logit_audio_removed, pred_audio_removed, z_audio_removed = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["audio"], training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["audio"], training=False)
             
             _, logit_only_text, pred_only_text, z_only_text = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video", "audio"], training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["video", "audio"], training=False)
             
             _, logit_only_visual, pred_only_visual, z_only_visual = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "audio"], training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "audio"], training=False)
             
             _, logit_only_audio, pred_only_audio, z_only_audio = self.model(t, text_mask, v, visual_mask, a, audio_mask, \
-                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "video"], training=True)
+                            labels_embedding, label_mask, groundTruth_labels=emo_label, masked_modality=["text", "video"], training=False)
             
             pred_list = [pred_text_removed, pred_visual_removed, pred_audio_removed, pred_only_text, pred_only_visual, pred_only_audio]
             tcp_list = [
@@ -278,142 +278,6 @@ class Inference(object):
             ]
 
         return pred_list, tcp_list
-
-
-    
-    def inference_with_confidnet(self):
-        print("Start inference...")
-        self.loss_mcp = nn.CrossEntropyLoss(reduction="mean")
-        self.loss_tcp = nn.MSELoss(reduction="mean")
-
-        self.model.eval()
-        self.confidence_model.eval()
-
-        y_true, y_pred = [], []
-        tcp_true, tcp_pred = [], []
-        eval_loss, eval_conf_loss = [], []
-
-        results = defaultdict(list)
-
-        with torch.no_grad():
-
-            for batch in tqdm(self.dataloader):
-                self.model.zero_grad()
-                self.confidence_model.zero_grad()
-
-                actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
-                    _, _, _, _, _ = batch
-
-                t = to_gpu(t)
-                v = to_gpu(v)
-                a = to_gpu(a)
-                y = to_gpu(y)
-                emo_label = to_gpu(emo_label)
-                # l = to_gpu(l)
-                l = to_cpu(l)
-                bert_sent = to_gpu(bert_sent)
-                bert_sent_type = to_gpu(bert_sent_type)
-                bert_sent_mask = to_gpu(bert_sent_mask)
-
-                # Mutli-Modal Fusion Model
-                loss, predicted_scores, predicted_labels, hidden_state = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
-                        dynamic_weights=None, training=False)
-                
-                # Text Masking Fusion Model
-                loss_t, predicted_scores_t, predicted_labels_t, hidden_state_t = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text",\
-                        dynamic_weights=None, training=False)
-
-                # Video Masking Fusion Model
-                loss_v, predicted_scores_v, predicted_labels_v, hidden_state_v = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video",\
-                        dynamic_weights=None, training=False)
-                
-                # Audio Masking Fusion Model
-                loss_a, predicted_scores_a, predicted_labels_a, hidden_state_a = \
-                    self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask,labels=emo_label, masked_modality="audio",\
-                        dynamic_weights=None, training=False)
-                
-                
-                emo_label = emo_label.type(torch.float)
-
-                # Confidence Model
-                predicted_tcp, _ = self.confidence_model(hidden_state)
-                predicted_tcp_t, _ = self.confidence_model(hidden_state_t)
-                predicted_tcp_v, _ = self.confidence_model(hidden_state_v)
-                predicted_tcp_a, _ = self.confidence_model(hidden_state_a)
-
-                predicted_tcp, predicted_tcp_t, predicted_tcp_v, predicted_tcp_a = \
-                    predicted_tcp.squeeze(), predicted_tcp_t.squeeze(), predicted_tcp_v.squeeze(), predicted_tcp_a.squeeze()
-                
-                
-                # Calculate target tcp
-                target_tcp = get_tcp_target(emo_label, predicted_scores)
-
-                # Calculate loss
-                conf_loss = self.get_conf_loss(predicted_scores, emo_label, predicted_tcp)
-
-                # Make result dictionary
-                results["id"].extend(ids)
-                results["input_sentence"].extend(actual_words)
-                results["label"].extend(emo_label.detach().cpu().numpy())
-                results["prediction"].extend(predicted_labels.detach().cpu().numpy())
-                results["target_tcp"].extend(target_tcp.detach().cpu().numpy())
-                results["pred_tcp"].extend(predicted_tcp.detach().cpu().numpy())
-                results["pred_tcp-t"].extend(predicted_tcp_t.detach().cpu().numpy())
-                results["pred_tcp-v"].extend(predicted_tcp_v.detach().cpu().numpy())
-                results["pred_tcp-a"].extend(predicted_tcp_a.detach().cpu().numpy())
-
-                eval_loss.append(loss.item())
-                eval_conf_loss.append(conf_loss.item())
-
-                y_pred.append(predicted_labels.detach().cpu().numpy())
-                y_true.append(emo_label.detach().cpu().numpy())
-                # tcp_pred.append(predicted_tcp.detach().cpu().numpy())
-                # tcp_true.append(target_tcp.detach().cpu().numpy())
-
-            eval_loss = np.mean(eval_loss)
-            eval_conf_loss = np.mean(eval_conf_loss)
-            y_true = np.concatenate(y_true, axis=0).squeeze()
-            y_pred = np.concatenate(y_pred, axis=0).squeeze()
-
-
-        # columns = ["id", "input_sentence", "label", "prediction", "tcp", "pred_tcp", "pred_tcp-t", "pred_tcp-v", "pred_tcp-a"]
-        file_name = "/results_kt-{}({})-dropout({})-confidNet-dropout({})-batchsize({}).csv".format(\
-            self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
-        
-        with open(os.getcwd() + file_name, 'w') as f:
-            key_list = list(results.keys())
-            writer = csv.writer(f)
-            writer.writerow(results.keys())
-            for i in range(len(results["id"])):
-                writer.writerow([results[x][i] for x in key_list])
-        
-        # Calculate accuracy
-        accuracy = get_accuracy(y_true, y_pred)
-        eval_values = get_metrics(y_true, y_pred, average=self.config.eval_mode)
-
-        print("="*50)
-        print("Loss: {:.4f}, Conf Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, eval_conf_loss, accuracy))
-        print("Precision: {:.4f}, Recall: {:.4f}, F1: {:.4f}".format(eval_values['precision'], eval_values['recall'], eval_values['f1']))
-        print("="*50)
-
-        # Save metric results into json
-        total_results = {
-            "loss": eval_loss,
-            "conf_loss": eval_conf_loss,
-            "accuracy": accuracy,
-            "precision": eval_values['precision'],
-            "recall": eval_values['recall']
-        }
-
-        json_name = "/results_kt-{}({})-dropout({})-confidNet-dropout({})-batchsize({}).json".format(\
-        self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.conf_dropout, self.config.batch_size)
-
-        with open(os.getcwd() + json_name, 'w') as f:
-            json.dump(total_results, f, indent=4)
-
 
 
     def get_conf_loss(self, pred, truth, predicted_tcp):    # pred: (batch_size, num_classes), truth: (batch_size, num_classes)

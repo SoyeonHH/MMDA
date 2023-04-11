@@ -35,7 +35,7 @@ from .module_visual import VisualModel, VisualConfig, VisualOnlyMLMHead
 from .module_audio import AudioModel, AudioConfig, AudioOnlyMLMHead
 from .module_cross import CrossModel, CrossConfig
 from .module_decoder import DecoderModel, DecoderConfig
-from .until_module import getBinaryTensor, GradReverse, CTCModule
+from .until_module import getBinaryTensor, GradReverse, CTCModule, get_cls_loss, get_kt_loss
 # from warpctc_pytorch import CTCLoss
 import warnings
 warnings.filterwarnings("ignore")
@@ -238,7 +238,7 @@ class TAILOR(TAILORPreTrainedModel):
         self.text_norm = NormalizeText(task_config)   
         self.visual_norm = NormalizeVideo(task_config)
         self.audio_norm = NormalizeAudio(task_config)
-        self.ml_loss = nn.BCELoss()
+        # self.ml_loss = nn.BCELoss()
         self.adv_loss = nn.CrossEntropyLoss()
 
         if self.aligned == False:
@@ -302,6 +302,7 @@ class TAILOR(TAILORPreTrainedModel):
 
         # ==========> label modal alignment
         decoder_output = self.decoder(label_input, cross_output, label_mask, cross_mask)
+        hidden_state = decoder_output.view(decoder_output.size(0), -1)
         # <========== label modal alignment
         cross_predict_scores = self.cross_classifier(decoder_output)
         cross_predict_scores  = cross_predict_scores.view(-1, self.num_classes)     
@@ -327,8 +328,8 @@ class TAILOR(TAILORPreTrainedModel):
             all_loss = 0.
             pooled_common = common_feature[:, 0] #[B, D]
             common_pred = self.common_classfier(pooled_common)
-            ml_loss = self.ml_loss(predict_scores, groundTruth_labels)
-            cml_loss = self.ml_loss(common_pred, groundTruth_labels)
+            ml_loss = get_cls_loss(predict_scores, groundTruth_labels)
+            cml_loss = get_cls_loss(common_pred, groundTruth_labels)
             preivate_diff_loss = self.calculate_orthogonality_loss(private_text, private_visual) + self.calculate_orthogonality_loss(private_text, private_audio) + self.calculate_orthogonality_loss(private_visual, private_audio)
             common_diff_loss = self.calculate_orthogonality_loss(common_text, private_text) + self.calculate_orthogonality_loss(common_visual, private_visual) + self.calculate_orthogonality_loss(common_audio, private_audio)
             adv_preivate_loss = self.adv_loss(private_text_modal_pred, text_modal) + self.adv_loss(private_visual_modal_pred, visual_modal) + self.adv_loss(private_audio_modal_pred, audio_modal)
@@ -350,11 +351,14 @@ class TAILOR(TAILORPreTrainedModel):
             else:
                 all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss  + 0.5 * ctc_loss
 
+            if self.task_config.use_kt:
+                all_loss += self.task_config.kt_weight * get_kt_loss(text_output, visual_output, audio_output, groundTruth_labels, dynamic_weight=dynamic_weight)
+            
             loss = all_loss
         else:
-            loss = self.ml_loss(predict_scores, groundTruth_labels)
+            loss = get_cls_loss(predict_scores, groundTruth_labels)
         
-        return loss, predict_scores, predict_labels, decoder_output
+        return loss, predict_scores, predict_labels, hidden_state
 
 
     def get_text_visual_audio_output(self, text, text_mask, visual, visual_mask, audio, audio_mask):

@@ -71,6 +71,7 @@ class Solver(object):
 
         # Final list 
         for name, param in self.model.named_parameters():
+            param.requires_grad = True
 
             # Bert freezing customizations 
             if "bertmodel.encoder.layer" in name:
@@ -95,8 +96,9 @@ class Solver(object):
         
         # # Multi-GPU training setting
         # if torch.cuda.device_count() > 1:
-        #     print("Let's use", torch.cuda.device_count(), "GPUs!")
-        #     self.model = nn.DataParallel(self.model)
+        #     self.train_config.n_gpu = torch.cuda.device_count()
+        #     print("Let's use", self.train_config.n_gpu, "GPUs!")
+        #     self.model = nn.DataParallel(self.model, device_ids=[i for i in range(self.train_config.n_gpu)])
         
         # if torch.cuda.is_available() and cuda:
         self.model.to(self.device)
@@ -521,7 +523,11 @@ class ConfidNet_Trainer(object):
 
         # Initialize confidence network
         if self.confidnet is None:
-            self.confidnet = ConfidenceRegressionNetwork(self.config, input_dims=self.config.hidden_size*6, num_classes=1, dropout=self.config.conf_dropout)
+            if self.config.model == "MISA":
+                input_dim = self.config.hidden_size*6
+            elif self.config.model == "TAILOR":
+                input_dim = self.config.hidden_size*6
+            self.confidnet = ConfidenceRegressionNetwork(self.config, input_dims=input_dim, num_classes=1, dropout=self.config.conf_dropout)
             self.confidnet = self.confidnet.to(self.device)
 
         self.optimizer = torch.optim.Adam(self.confidnet.parameters(), lr=self.config.conf_lr)

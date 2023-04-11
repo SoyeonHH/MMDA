@@ -11,15 +11,15 @@ import torch.nn as nn
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # path to a pretrained word embedding file
-word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
-# word_emb_path = '/data2/multimodal/glove.840B.300d.txt'
+# word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
+word_emb_path = '/data2/multimodal/glove.840B.300d.txt'
 assert(word_emb_path is not None)
 
 
-sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
-data_dir = Path('/home/iknow/workspace/multimodal/MOSEI')
-# sdk_dir = Path('/data2/multimodal/CMU-MultimodalSDK')
-# data_dir = Path('/data2/multimodal/MOSEI')
+# sdk_dir = Path('/home/iknow/workspace/multimodal/CMU-MultimodalSDK')
+# data_dir = Path('/home/iknow/workspace/multimodal/MOSEI')
+sdk_dir = Path('/data2/multimodal/CMU-MultimodalSDK')
+data_dir = Path('/data2/multimodal/MOSEI')
 optimizer_dict = {'RMSprop': optim.RMSprop, 'Adam': optim.Adam}
 activation_dict = {'elu': nn.ELU, "hardshrink": nn.Hardshrink, "hardtanh": nn.Hardtanh,
                    "leakyrelu": nn.LeakyReLU, "prelu": nn.PReLU, "relu": nn.ReLU, "rrelu": nn.RReLU,
@@ -48,6 +48,7 @@ class Config(object):
                 
         self.dataset_dir = self.data_dir = data_dir
         self.sdk_dir = sdk_dir
+        self.cache_dir = None
 
         # Glove path
         self.word_emb_path = word_emb_path
@@ -72,6 +73,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--mode', type=str, default='train', help='one of train, dev or test')
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--n_gpu', type=int, default=1)
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--checkpoint', type=str, default=None)
 
@@ -90,9 +92,9 @@ def get_config(parse=True, **optional_kwargs):
     time_now = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     parser.add_argument('--name', type=str, default=f"{time_now}")
     parser.add_argument('--num_classes', type=int, default=6)   # Fixed to classify
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--eval_batch_size', type=int, default=10)
-    parser.add_argument('--n_epoch', type=int, default=10)
+    parser.add_argument('--n_epoch', type=int, default=1)
     parser.add_argument('--patience', type=int, default=6)
 
     parser.add_argument('--learning_rate', type=float, default=1e-5)
@@ -146,12 +148,12 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--kt_model', type=str, 
                     default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
     parser.add_argument('--kt_weight', type=float, default=10000.0)
-    parser.add_argument('--n_epoch_dkt', type=int, default=30)
+    parser.add_argument('--n_epoch_dkt', type=int, default=1)
     parser.add_argument('--dynamic_method', type=str, default='ratio', help='one of {threshold, ratio, noise_level}')
 
     # Train ConfidNet
     parser.add_argument('--use_confidNet', type=str2bool, default=True)
-    parser.add_argument('--n_epoch_conf', type=int, default=10)
+    parser.add_argument('--n_epoch_conf', type=int, default=1)
     parser.add_argument('--conf_loss', type=str, default='mse', help='one of {mse, focal, ranking}')
     parser.add_argument('--conf_lr', type=float, default=1e-5)
     parser.add_argument('--conf_dropout', type=float, default=0.6)

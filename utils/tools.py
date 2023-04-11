@@ -54,7 +54,7 @@ def load_model(args, name='', confidNet=None, dynamicKT=None):
         elif args.model == 'TAILOR':
             cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed')
 
-            model = TAILOR.from_pretrained(args.bert_model, args.visual_model, args.audio_model, args.cross_model,
+            model = TAILOR.from_pretrained(args.bert_model, args.visual_model, args.audio_model, args.cross_model, args.decoder_model,
                                     cache_dir=cache_dir, state_dict=model_state_dict, task_config=args)
         
         model.load_state_dict(model_state_dict)
