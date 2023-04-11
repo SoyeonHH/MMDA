@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import numpy as np
 
 from MISA.utils import to_gpu, to_cpu
-from utils.eval import *
 
 """
 Adapted from https://github.com/fungtion/DSN/blob/master/functions.py

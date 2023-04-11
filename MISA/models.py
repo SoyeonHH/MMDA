@@ -8,7 +8,6 @@ import torch.nn as nn
 from torch.autograd import Function, Variable
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from transformers import BertModel, BertConfig
-from sklearn.preprocessing import MinMaxScaler
 
 from MISA.utils.functions import *
 from MISA.utils import ReverseLayerF, getBinaryTensor
