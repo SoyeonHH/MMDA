@@ -33,7 +33,7 @@ def main():
 
     # Setting training log
     args = get_config()
-    wandb.init(project="MMDA")
+    wandb.init(project=args.model)
     wandb.config.update(args)
 
     # Setting random seed
@@ -57,7 +57,8 @@ def main():
     dev_data_loader = get_loader(dev_config, shuffle = False)
     test_data_loader = get_loader(test_config, shuffle = False)
 
-    train_config.use_kt = False
+    if args.kt_model == 'Dynamic-tcp':
+        train_config.use_kt = False
     solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
 
     # Build the model

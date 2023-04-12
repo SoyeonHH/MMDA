@@ -41,6 +41,7 @@ class MISA(nn.Module):
         self.dropout_rate = dropout_rate = config.dropout
         self.activation = self.config.activation()
         self.tanh = nn.Tanh()
+        self.ml_loss = nn.BCELoss(reduction="sum")
 
         ## Initialize the model
         rnn = nn.LSTM if self.config.rnncell == 'lstm' else nn.GRU
@@ -263,9 +264,11 @@ class MISA(nn.Module):
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
 
+        predicted_score = predicted_scores.flatten()
+        labels = labels.flatten()
+
         # loss
-        cls_loss = get_cls_loss(self.config, predicted_scores, labels)
-        kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
+        cls_loss = self.ml_loss(predicted_score, labels)
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
         cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
@@ -283,6 +286,7 @@ class MISA(nn.Module):
                 self.config.recon_weight * recon_loss
 
             if self.config.use_kt:
+                kt_loss = get_kt_loss(self.config, utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
                 loss += self.config.kt_weight * kt_loss
         else:
             loss = cls_loss
