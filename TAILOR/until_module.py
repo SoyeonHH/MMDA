@@ -337,7 +337,7 @@ class CTCModule(nn.Module): #
 ####################################
 
 def get_cls_loss(predicted_scores, emo_label):
-    criterion = nn.BCELoss(reduction="mean")
+    criterion = nn.BCELoss(reduction="sum")
     
     emo_label = emo_label.type(torch.float)
 
