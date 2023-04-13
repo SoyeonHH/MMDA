@@ -235,13 +235,13 @@ class TAILOR(TAILORPreTrainedModel):
             nn.Linear(task_config.hidden_size // 2, 3),
         )
 
-        self.cross_classifier = EmotionClassifier(cross_config.hidden_size, 1) 
+        self.cross_classifier = EmotionClassifier(cross_config.hidden_size*6, task_config.num_classes) 
         self.post_hidden_layer = nn.Linear(task_config.hidden_size*6, task_config.hidden_size)
         self.text_embed = nn.Embedding(len(task_config.word2id), task_config.embedding_size)
         self.text_norm = NormalizeText(task_config)   
         self.visual_norm = NormalizeVideo(task_config)
         self.audio_norm = NormalizeAudio(task_config)
-        self.ml_loss = nn.BCELoss()
+        self.ml_loss = nn.BCELoss(reduction="sum")
         self.adv_loss = nn.CrossEntropyLoss()
 
         if self.aligned == False:
@@ -305,14 +305,15 @@ class TAILOR(TAILORPreTrainedModel):
 
         # ==========> label modal alignment
         decoder_output = self.decoder(label_input, cross_output, label_mask, cross_mask)
-        hidden_state = decoder_output.view(decoder_output.size(0), -1)
-        hidden_state = self.post_hidden_layer(hidden_state)
+        decoder_output = decoder_output.view(decoder_output.size(0), -1)
+        hidden_state = self.post_hidden_layer(decoder_output)
         # <========== label modal alignment
         cross_predict_scores = self.cross_classifier(decoder_output)
-        cross_predict_scores  = cross_predict_scores.view(batch, self.num_classes)     
-        predict_scores = cross_predict_scores.squeeze()
+        cross_predict_scores  = cross_predict_scores.view(-1, self.num_classes)     
+        predict_scores = cross_predict_scores
         predict_labels = getBinaryTensor(predict_scores)
         # groundTruth_labels = groundTruth_labels.view(-1, self.num_classes)
+        predict_score, labels = predict_scores.flatten(), groundTruth_labels.flatten()
                                                                   
         if training:
             text_modal = torch.zeros_like(common_mask).view(-1) #[B, L]
@@ -332,8 +333,8 @@ class TAILOR(TAILORPreTrainedModel):
             all_loss = 0.
             pooled_common = common_feature[:, 0] #[B, D]
             common_pred = self.common_classfier(pooled_common)
-            ml_loss = self.ml_loss(predict_scores, groundTruth_labels)
-            cml_loss = self.ml_loss(common_pred, groundTruth_labels)
+            ml_loss = self.ml_loss(predict_score, labels)
+            cml_loss = self.ml_loss(common_pred.flatten(), labels)
             preivate_diff_loss = self.calculate_orthogonality_loss(private_text, private_visual) + self.calculate_orthogonality_loss(private_text, private_audio) + self.calculate_orthogonality_loss(private_visual, private_audio)
             common_diff_loss = self.calculate_orthogonality_loss(common_text, private_text) + self.calculate_orthogonality_loss(common_visual, private_visual) + self.calculate_orthogonality_loss(common_audio, private_audio)
             adv_preivate_loss = self.adv_loss(private_text_modal_pred, text_modal) + self.adv_loss(private_visual_modal_pred, visual_modal) + self.adv_loss(private_audio_modal_pred, audio_modal)
@@ -351,7 +352,8 @@ class TAILOR(TAILORPreTrainedModel):
                 ctc_loss = ctc_loss.cuda()
             
             if self.aligned:
-                all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss    
+                # all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss  
+                all_loss = ml_loss  
             else:
                 all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss  + 0.5 * ctc_loss
 
@@ -360,7 +362,7 @@ class TAILOR(TAILORPreTrainedModel):
             
             loss = all_loss
         else:
-            loss = self.ml_loss(predict_scores, groundTruth_labels)
+            loss = self.ml_loss(predict_score, labels)
         
         return loss, predict_scores, predict_labels, hidden_state
 

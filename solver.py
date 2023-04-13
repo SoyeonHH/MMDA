@@ -605,7 +605,7 @@ class ConfidNet_Trainer(object):
                 print("Saving the best model...")
                 save_model(self.config, self.confidnet, confidNet=True)
 
-            wandb.log({"train_loss": train_avg_loss, "valid_loss": valid_loss})
+            # wandb.log({"train_loss": train_avg_loss, "valid_loss": valid_loss})
 
 
         # Model Test

@@ -218,7 +218,7 @@ class Inference(object):
             "acc_a": acc_list[5]
         }
 
-        if self.dkt:
+        if self.config.use_kt:
             json_name = "/results/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
                 self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
         else:
