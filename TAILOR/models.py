@@ -332,9 +332,9 @@ class TAILOR(TAILORPreTrainedModel):
 
             all_loss = 0.
             pooled_common = common_feature[:, 0] #[B, D]
-            common_pred = self.common_classfier(pooled_common)
+            common_pred = self.common_classfier(pooled_common).flatten()
             ml_loss = self.ml_loss(predict_score, labels)
-            cml_loss = self.ml_loss(common_pred.flatten(), labels)
+            cml_loss = self.ml_loss(common_pred, labels)
             preivate_diff_loss = self.calculate_orthogonality_loss(private_text, private_visual) + self.calculate_orthogonality_loss(private_text, private_audio) + self.calculate_orthogonality_loss(private_visual, private_audio)
             common_diff_loss = self.calculate_orthogonality_loss(common_text, private_text) + self.calculate_orthogonality_loss(common_visual, private_visual) + self.calculate_orthogonality_loss(common_audio, private_audio)
             adv_preivate_loss = self.adv_loss(private_text_modal_pred, text_modal) + self.adv_loss(private_visual_modal_pred, visual_modal) + self.adv_loss(private_audio_modal_pred, audio_modal)
@@ -352,8 +352,7 @@ class TAILOR(TAILORPreTrainedModel):
                 ctc_loss = ctc_loss.cuda()
             
             if self.aligned:
-                # all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss  
-                all_loss = ml_loss  
+                all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss  
             else:
                 all_loss = ml_loss  + 0.01 * (adv_common_loss + adv_preivate_loss) + 5e-6 * (preivate_diff_loss + common_diff_loss) + 0.5 * cml_loss  + 0.5 * ctc_loss
 

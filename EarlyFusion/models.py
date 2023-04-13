@@ -59,6 +59,8 @@ class EarlyFusion(nn.Module):
         self.audio_dropout = dropouts[2]
         self.post_fusion_dropout = dropouts[3]
 
+        self.ml_loss = nn.BCELoss(reduction="sum")
+
         # define the pre-fusion subnetworks
         rnn = nn.LSTM if self.config.rnncell == 'lstm' else nn.GRU
 
@@ -176,11 +178,14 @@ class EarlyFusion(nn.Module):
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
 
+        predicted_score = predicted_scores.flatten()
+        labels = labels.flatten()
+
         # loss
-        cls_loss = get_cls_loss(predicted_scores, labels)
-        kt_loss = get_kt_loss(utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
+        cls_loss = self.ml_loss(predicted_score, labels)
 
         if training and self.config.use_kt:
+            kt_loss = get_kt_loss(utterance_text, utterance_video, utterance_audio, labels, dynamic_weight=dynamic_weights)
             loss = cls_loss + self.config.kt_weight * kt_loss
         else:
             loss = cls_loss

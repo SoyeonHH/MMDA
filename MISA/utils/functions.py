@@ -124,22 +124,15 @@ def get_cls_loss(predicted_scores, emo_label):
     
     emo_label = emo_label.type(torch.float)
 
+    predicted_scores, emo_label = torch.permute(predicted_scores, (1, 0)), torch.permute(emo_label, (1, 0)) # (num_classes, batch_size)
+
     cls_loss = 0.0
+
+    # summation of average batch loss for each label
     for i in range(emo_label.size(0)):
-        bce = 0.0
-        for j in range(emo_label.size(1)):
-            bce += criterion(predicted_scores[i][j], emo_label[i][j])
-        cls_loss += bce / emo_label.size(1)
+        cls_loss += criterion(predicted_scores[i], emo_label[i])
 
-    # predicted_scores, emo_label = torch.permute(predicted_scores, (1, 0)), torch.permute(emo_label, (1, 0)) # (num_classes, batch_size)
-
-    # cls_loss = 0.0
-
-    # # summation of loss for each label
-    # for i in range(emo_label.size(0)):
-    #     cls_loss += criterion(predicted_scores[i], emo_label[i])
-
-    return cls_loss / emo_label.size(0)
+    return cls_loss
 
 
 def get_domain_loss(config, domain_pred_t, domain_pred_v, domain_pred_a):

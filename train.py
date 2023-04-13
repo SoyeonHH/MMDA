@@ -50,6 +50,11 @@ def main():
     dev_config = get_config(mode='dev')
     test_config = get_config(mode='test')
 
+    if args.kt_model == 'Dynamic-tcp':
+        train_config.use_kt = False
+        dev_config.use_kt = False
+        test_config.use_kt = False
+
     print(train_config)
 
     # Creating pytorch dataloaders
@@ -57,8 +62,6 @@ def main():
     dev_data_loader = get_loader(dev_config, shuffle = False)
     test_data_loader = get_loader(test_config, shuffle = False)
 
-    if args.kt_model == 'Dynamic-tcp':
-        train_config.use_kt = False
     solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
 
     # Build the model
@@ -75,6 +78,9 @@ def main():
     if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
         # Training the confidnet with zero_label_processed version
         train_config.use_kt = True
+        dev_config.use_kt = True
+        test_config.use_kt = True
+        
         train_data_loader_nonzero = get_loader(train_config, shuffle = True, zero_label_process=True)
         dev_data_loader_nonzero = get_loader(dev_config, shuffle = False, zero_label_process=True)
         test_data_loader_nonzero = get_loader(test_config, shuffle = False, zero_label_process=True)
