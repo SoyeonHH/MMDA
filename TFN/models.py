@@ -1,8 +1,15 @@
+"""
+reference: Zadeh, Amir, et al. "Tensor fusion network for multimodal sentiment analysis." arXiv preprint arXiv:1707.07250 (2017). https://github.com/Justin1904/TensorFusionNetworks
+"""
+
 import numpy as np
 from EarlyFusion.functions import *
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+from torch.nn.parameter import Parameter
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from transformers import BertModel, BertConfig
 
@@ -19,7 +26,8 @@ class EmotionClassifier(nn.Module):
         out = self.dropout(out)
         out = self.activation(out)
         return out
-    
+
+
 class SubNet(nn.Module):
     '''
     The LSTM-based subnetwork that is used in TFN for text
@@ -52,7 +60,7 @@ class SubNet(nn.Module):
         return y_1
 
 
-class EarlyFusion(nn.Module):
+class TFN(nn.Module):
     
     def __init__(self, config, hidden_dims, text_out, dropouts, post_fusion_dim):
         '''
@@ -65,7 +73,7 @@ class EarlyFusion(nn.Module):
         Output:
             (return value in forward) multi-label classification results
         '''
-        super(EarlyFusion, self).__init__()
+        super(TFN, self).__init__()
 
         # Configuration
         self.config = config
@@ -94,9 +102,9 @@ class EarlyFusion(nn.Module):
         self.embed = nn.Embedding(len(config.word2id), self.text_in)
         self.text_subnet = SubNet(self.text_in, self.text_hidden, self.text_out, dropout=self.text_dropout)
 
-       # define the post-fusion layers
+        # define the post-fusion layers
         self.post_fusion_dropout = nn.Dropout(self.post_fusion_dropout)
-        self.post_fusion_layer_1 = nn.Linear(self.text_out + self.video_hidden + self.audio_hidden, self.post_fusion_dim)
+        self.post_fusion_layer_1 = nn.Linear((self.text_out + 1) * (self.video_hidden + 1) * (self.audio_hidden + 1), self.post_fusion_dim)
         self.post_fusion_layer_2 = nn.Linear(self.post_fusion_dim, self.post_fusion_dim)
         
         # define the classifier
@@ -113,7 +121,7 @@ class EarlyFusion(nn.Module):
 
         batch_size = lengths.size(0)
         labels = labels.type(torch.float)
-
+        
         # extract features from subnets
         sentences = self.embed(sentences)
         sentences = sentences.view(batch_size, -1, self.text_in)
@@ -133,16 +141,34 @@ class EarlyFusion(nn.Module):
             if "audio" in masked_modality:
                 audio_h = torch.zeros_like(audio_h)
 
-        # concatenate the outputs of the subnetworks
-        h = torch.cat((text_h, video_h, audio_h), dim=1)
+        # next we perform "tensor fusion", which is essentially appending 1s to the tensors and take Kronecker product
+        if audio_h.is_cuda:
+            DTYPE = torch.cuda.FloatTensor
+        else:
+            DTYPE = torch.FloatTensor
 
-        # apply the post-fusion layers
-        h_dropped = self.post_fusion_dropout(h)
-        h_1 = F.relu(self.post_fusion_layer_1(h_dropped))
-        h_2 = F.relu(self.post_fusion_layer_2(h_1))
+        _audio_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE).to(self.config.device), requires_grad=False), audio_h), dim=1)
+        _video_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE).to(self.config.device), requires_grad=False), video_h), dim=1)
+        _text_h = torch.cat((Variable(torch.ones(batch_size, 1).type(DTYPE).to(self.config.device), requires_grad=False), text_h), dim=1)
+
+        # _audio_h has shape (batch_size, audio_in + 1), _video_h has shape (batch_size, _video_in + 1)
+        # we want to perform outer product between the two batch, hence we unsqueenze them to get
+        # (batch_size, audio_in + 1, 1) X (batch_size, 1, video_in + 1)
+        # fusion_tensor will have shape (batch_size, audio_in + 1, video_in + 1)
+        fusion_tensor = torch.bmm(_audio_h.unsqueeze(2), _video_h.unsqueeze(1))
+        
+        # next we do kronecker product between fusion_tensor and _text_h. This is even trickier
+        # we have to reshape the fusion tensor during the computation
+        # in the end we don't keep the 3-D tensor, instead we flatten it
+        fusion_tensor = fusion_tensor.view(-1, (self.audio_hidden + 1) * (self.video_hidden + 1), 1)
+        fusion_tensor = torch.bmm(fusion_tensor, _text_h.unsqueeze(1)).view(batch_size, -1)
+        
+        post_fusion_dropped = self.post_fusion_dropout(fusion_tensor)
+        post_fusion_1 = F.relu(self.post_fusion_layer_1(post_fusion_dropped))
+        post_fusion_2 = F.relu(self.post_fusion_layer_2(post_fusion_1))
 
         # apply the classifier
-        predicted_scores = self.classifier(h_2)
+        predicted_scores = self.classifier(post_fusion_2)
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
 
@@ -158,6 +184,6 @@ class EarlyFusion(nn.Module):
         else:
             loss = cls_loss
         
-        return loss, predicted_scores, predicted_labels, h_2
+        return loss, predicted_scores, predicted_labels, post_fusion_2
 
         

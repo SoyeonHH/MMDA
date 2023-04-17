@@ -72,7 +72,7 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train', help='one of train, dev or test')
     parser.add_argument('--runs', type=int, default=5)
-    parser.add_argument('--device', type=str, default='cuda:1')
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--n_gpu', type=int, default=1)
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--checkpoint', type=str, default=None)
@@ -86,18 +86,19 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--aligned', type=str2bool, default=True)
 
     # Model
-    parser.add_argument('--model', type=str, default='TAILOR', help='one of {Early, TFN, MISA, TAILOR}')
+    parser.add_argument('--model', type=str, default='MISA', help='one of {Early, TFN, MISA, TAILOR}')
 
     # Train
     time_now = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
     parser.add_argument('--name', type=str, default=f"{time_now}")
     parser.add_argument('--num_classes', type=int, default=6)   # Fixed to classify
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--eval_batch_size', type=int, default=10)
     parser.add_argument('--n_epoch', type=int, default=10)
     parser.add_argument('--patience', type=int, default=6)
 
     parser.add_argument('--learning_rate', type=float, default=1e-5)
+    parser.add_argument('--lr_decay', type=float, default=0.9)
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--clip', type=float, default=1.0)
     parser.add_argument('--weight_decay', type=float, default=0.1)
@@ -137,6 +138,9 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument("--init_model", default=None, type=str, required=False, help="Initial model.") 
     parser.add_argument("--warmup_proportion", default=0.1, type=float,
                         help="Proportion of training to perform linear learning rate warmup for. E.g., 0.1 = 10%% of training.")
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
+                        help="Number of updates steps to accumulate before performing a backward/update pass.")
+    parser.add_argument('--n_gpu', type=int, default=1, help="Changed in the execute process.")
     parser.add_argument('--bert_num_hidden_layers', type=int, default=6, help="Layer NO. of visual.")
     parser.add_argument('--visual_num_hidden_layers', type=int, default=3, help="Layer NO. of visual.")
     parser.add_argument('--audio_num_hidden_layers', type=int, default=3, help="Layer No. of audio")
@@ -147,6 +151,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
                     default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
+    parser.add_argument('--warm_start', type=str2bool, default=True)
     parser.add_argument('--kt_weight', type=float, default=10000.0)
     parser.add_argument('--n_epoch_dkt', type=int, default=30)
     parser.add_argument('--dynamic_method', type=str, default='ratio', help='one of {threshold, ratio, noise_level}')
