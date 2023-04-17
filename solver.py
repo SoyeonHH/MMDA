@@ -33,6 +33,7 @@ torch.cuda.manual_seed_all(123)
 from MISA.utils import to_gpu, to_cpu, time_desc_decorator, DiffLoss, MSE, SIMSE, CMD
 from MISA.models import MISA
 from EarlyFusion.models import EarlyFusion
+from TFN.models import TFN
 from TAILOR.models import TAILOR
 from TAILOR.optimization import BertAdam
 from confidNet import ConfidenceRegressionNetwork
@@ -65,6 +66,8 @@ class Solver(object):
         if self.model is None:
             if self.train_config.model == "Early":
                 self.model = EarlyFusion(self.train_config, (128, 32, 32), 64, (0.3, 0.3, 0.3, 0.3), 32)
+            elif self.train_config.model == "TFN":
+                self.model = TFN(self.train_config, (128, 32, 32), 64, (0.3, 0.3, 0.3, 0.3), 32)
             elif self.train_config.model == "MISA":
                 self.model = MISA(self.train_config)
             elif self.train_config.model == "TAILOR":
@@ -131,12 +134,13 @@ class Solver(object):
 
         for e in range(n_epoch):
             self.model.train()
+            self.model.zero_grad()
 
             train_loss = []
 
             for idx, batch in enumerate(tqdm(self.train_data_loader)):
-                # self.model.zero_grad()
-                self.optimizer.zero_grad()
+                self.model.zero_grad()
+                # self.optimizer.zero_grad()
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
                     visual_mask, audio_mask, text_mask, labels_embedding, label_mask = batch
 
@@ -213,7 +217,7 @@ class Solver(object):
                 
                 curr_patience = patience
                 # 임의로 모델 경로 지정 및 저장
-                save_model(self.train_config, self.model, dynamicKT=True) if additional_training else save_model(self.train_config, self.model)
+                save_model(self.train_config, self.model, dynamicKT=True) if self.train_config.use_kt else save_model(self.train_config, self.model)
                 # Print best model results
                 eval_values_best = get_metrics(best_truths, best_results, average=self.train_config.eval_mode)
                 print("-"*50)
@@ -303,7 +307,7 @@ class Solver(object):
         with torch.no_grad():
 
             for batch in dataloader:
-                self.model.zero_grad()
+                # self.model.zero_grad()
 
                 _, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids, \
                     visual_mask, audio_mask, text_mask, labels_embedding, label_mask = batch
@@ -403,19 +407,19 @@ class Solver(object):
                                 [1 if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
         
         elif self.train_config.dynamic_method == "ratio":
-            dynamic_weight = [[torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_text_removed[i] - tcp_video_removed[i]) for i in range(len(tcp_text_removed))], \
-                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_text_removed[i] - tcp_audio_removed[i]) for i in range(len(tcp_text_removed))], \
-                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_video_removed[i] - tcp_text_removed[i]) for i in range(len(tcp_text_removed))], \
-                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_video_removed[i] - tcp_audio_removed[i]) for i in range(len(tcp_text_removed))], \
-                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_audio_removed[i] - tcp_text_removed[i]) for i in range(len(tcp_text_removed))], \
-                                [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_audio_removed[i] - tcp_video_removed[i]) for i in range(len(tcp_text_removed))]]
+            # dynamic_weight = [[torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_text_removed[i] - tcp_video_removed[i]) for i in range(len(tcp_text_removed))], \
+            #                     [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_text_removed[i] - tcp_audio_removed[i]) for i in range(len(tcp_text_removed))], \
+            #                     [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_video_removed[i] - tcp_text_removed[i]) for i in range(len(tcp_text_removed))], \
+            #                     [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_video_removed[i] - tcp_audio_removed[i]) for i in range(len(tcp_text_removed))], \
+            #                     [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_audio_removed[i] - tcp_text_removed[i]) for i in range(len(tcp_text_removed))], \
+            #                     [torch.max(torch.zeros_like(tcp_text_removed[i]), tcp_audio_removed[i] - tcp_video_removed[i]) for i in range(len(tcp_text_removed))]]
 
-            # dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-            #                     [tcp_text_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-            #                     [tcp_video_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-            #                     [tcp_video_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-            #                     [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
-            #                     [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
+            dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_text_removed[i] if tcp_text_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_video_removed[i] if tcp_video_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_video_removed[i] if tcp_video_removed[i] > tcp_audio_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_text_removed[i] else 0 for i in range(len(tcp_text_removed))], \
+                                [tcp_audio_removed[i] if tcp_audio_removed[i] > tcp_video_removed[i] else 0 for i in range(len(tcp_text_removed))]]
             
         elif self.train_config.dynamic_method == "noise_level":
             dynamic_weight = [[tcp_text_removed[i] if tcp_text_removed[i] > tcp[i] else 0 for i in range(len(tcp_text_removed))], \
@@ -474,11 +478,11 @@ class Solver(object):
         
         elif self.train_config.dynamic_method == "ratio":
             # dynamic_weight = [[t_mask_loss[i] / v_mask_loss[i] if t_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-            #     [t_mask_loss[i] / a_mask_loss[i] if t_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-            #     [v_mask_loss[i] / t_mask_loss[i] if v_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-            #     [v_mask_loss[i] / a_mask_loss[i] if v_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-            #     [a_mask_loss[i] / t_mask_loss[i] if a_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
-            #     [a_mask_loss[i] / v_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
+            #     [t_mask_loss[i] - a_mask_loss[i] if t_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+            #     [v_mask_loss[i] - t_mask_loss[i] if v_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+            #     [v_mask_loss[i] - a_mask_loss[i] if v_mask_loss[i] > a_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+            #     [a_mask_loss[i] - t_mask_loss[i] if a_mask_loss[i] > t_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \
+            #     [a_mask_loss[i] - v_mask_loss[i] if a_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))]]
             
             # TODO: Train again with this ratio
             dynamic_weight = [[t_mask_loss[i] / v_mask_loss[i] if t_mask_loss[i] > v_mask_loss[i] else 0 for i in range(len(t_mask_loss))], \

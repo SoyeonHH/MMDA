@@ -5,6 +5,7 @@ import csv
 
 from MISA.models import MISA
 from EarlyFusion.models import EarlyFusion
+from TFN.models import TFN
 from TAILOR.models import TAILOR
 from TAILOR.file_utils import *
 from confidNet import ConfidenceRegressionNetwork
@@ -24,10 +25,14 @@ def save_load_name(args, name='', confidNet=None, dynamicKT=None):
         return name
 
     if dynamicKT==True:
-        name = f'model_{args.data}_{aligned}_{args.model}_kt_{args.kt_model}_{args.kt_weight}'
+        if args.kt_model == 'Dynamic-tcp' and args.warm_start == True:
+            name = f'model_{args.data}_{aligned}_{args.model}_kt_{args.kt_model}_{args.kt_weight}_warmstart'
+        else:
+            name = f'model_{args.data}_{aligned}_{args.model}_kt_{args.kt_model}_{args.kt_weight}'
     else:
         name = f'model_{args.data}_{aligned}_{args.model}_baseline_epoch({args.n_epoch})'
-        return name
+    
+    return name
 
 
 def save_model(args, model, name='', confidNet=None, dynamicKT=None):
@@ -47,16 +52,14 @@ def load_model(args, name='', confidNet=None, dynamicKT=None):
     model_state_dict = torch.load(buffer, map_location='cpu')
 
     if confidNet==True:
-        if args.model == "Early" or "TFN":
-            input_dim = 32
-        elif args.model == "MISA" or "TAILOR":
-            input_dim = args.hidden_size*6
-        model = ConfidenceRegressionNetwork(args, input_dims=input_dim, num_classes=1, dropout=args.conf_dropout)
+        model = ConfidenceRegressionNetwork(args, input_dims=args.hidden_size, num_classes=1, dropout=args.conf_dropout)
         model.load_state_dict(model_state_dict)
 
     else:
         if args.model == 'Early':
             model = EarlyFusion(args, (128, 32, 32), 64, (0.3, 0.3, 0.3, 0.3), 32)
+        elif args.model == "TFN":
+            model = TFN(args, (128, 32, 32), 64, (0.3, 0.3, 0.3, 0.3), 32)
         elif args.model == 'MISA':
             model = MISA(args)
         elif args.model == 'TAILOR':

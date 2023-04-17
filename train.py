@@ -50,7 +50,7 @@ def main():
     dev_config = get_config(mode='dev')
     test_config = get_config(mode='test')
 
-    if args.kt_model == 'Dynamic-tcp':
+    if args.kt_model == 'Dynamic-tcp' and args.warm_start == False:
         train_config.use_kt = False
         dev_config.use_kt = False
         test_config.use_kt = False
@@ -72,15 +72,16 @@ def main():
     # except:
     model = solver.train()
 
-    tester = Inference(test_config, test_data_loader, model=model)
+    tester = Inference(test_config, test_data_loader)
     tester.inference()
     
     if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
-        # Training the confidnet with zero_label_processed version
-        train_config.use_kt = True
-        dev_config.use_kt = True
-        test_config.use_kt = True
+        if args.warm_start == False:
+            train_config.use_kt = True
+            dev_config.use_kt = True
+            test_config.use_kt = True
         
+        # Training the confidnet with zero_label_processed version
         train_data_loader_nonzero = get_loader(train_config, shuffle = True, zero_label_process=True)
         dev_data_loader_nonzero = get_loader(dev_config, shuffle = False, zero_label_process=True)
         test_data_loader_nonzero = get_loader(test_config, shuffle = False, zero_label_process=True)
@@ -97,7 +98,7 @@ def main():
         solver_dkt_tcp.build()
         model = solver_dkt_tcp.train(additional_training=True)
 
-        tester = Inference(test_config, test_data_loader, model=model, dkt=True)
+        tester = Inference(test_config, test_data_loader, dkt=True)
         tester.inference()
 
 if __name__ == "__main__":

@@ -46,6 +46,8 @@ torch.cuda.manual_seed_all(123)
 from MISA.utils import to_gpu, to_cpu, time_desc_decorator
 from MISA.models import MISA
 from TAILOR.models import TAILOR
+from EarlyFusion.models import EarlyFusion
+from TFN.models import TFN
 
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
@@ -58,16 +60,7 @@ class Inference(object):
         self.device = torch.device(config.device)
 
         if model is None:
-            if self.model is None:
-                if config.model == "Early":
-                    self.model = EarlyFusion(config, (128, 16, 4), 64, (0.3, 0.3, 0.3, 0.3), 32)
-                elif config.model == "MISA":
-                    self.model = MISA(config)
-                elif config.model == "TAILOR":
-                    self.model = TAILOR.from_pretrained(config.bert_model, \
-                            config.visual_model, config.audio_model, config.cross_model, \
-                                config.decoder_model, task_config=config)
-            if dkt:
+            if config.use_kt:
                 self.model = load_model(config, dynamicKT=True)
             else:
                 self.model = load_model(config)
@@ -165,8 +158,12 @@ class Inference(object):
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
         if self.config.use_kt:
-            csv_file_name = os.getcwd() + "/results/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({}).csv".format(\
-            self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
+            if self.config.kt_model == "Dynamic-tcp" and self.config.warm_start == True:
+                csv_file_name = os.getcwd() + "/results/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({})_warmstart.csv".format(\
+                    self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
+            else:
+                csv_file_name = os.getcwd() + "/results/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({}).csv".format(\
+                    self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
         else:
             csv_file_name = os.getcwd() + "/results/results_{}_{}_dropout({})_batchsize({})_epoch({}).csv".format(\
                 self.config.data, self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
@@ -219,8 +216,12 @@ class Inference(object):
         }
 
         if self.config.use_kt:
-            json_name = "/results/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
-                self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
+            if self.config.kt_model == "Dynamic-tcp" and self.config.warm_start == True:
+                json_name = "/results/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({})_warmstart.json".format(\
+                    self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
+            else:
+                json_name = "/results/results_{}_kt-{}({})-dropout({})-batchsize({}).json".format(\
+                    self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size)
         else:
             json_name = "/results/results_{}_baseline_dropout({})-batchsize({})_epoch({}).json".format(self.config.model, self.config.dropout, self.config.batch_size, self.config.n_epoch)
         

@@ -264,11 +264,11 @@ class MISA(nn.Module):
         predicted_scores = predicted_scores.view(-1, self.config.num_classes)
         predicted_labels = getBinaryTensor(predicted_scores, self.config.threshold)
 
-        predicted_score = predicted_scores.flatten()
-        labels = labels.flatten()
+        # predicted_score = predicted_scores.flatten()
+        # labels = labels.flatten()
 
         # loss
-        cls_loss = self.ml_loss(predicted_score, labels)
+        cls_loss = get_cls_loss(predicted_scores, labels)
         domain_loss = get_domain_loss(self.config, self.domain_label_t, self.domain_label_v, self.domain_label_a)
         cmd_loss = get_cmd_loss(self.config, self.utt_shared_t, self.utt_shared_v, self.utt_shared_a)
         diff_loss = get_diff_loss([self.utt_shared_t, self.utt_shared_v, self.utt_shared_a], [self.utt_private_t, self.utt_private_v, self.utt_private_a])
