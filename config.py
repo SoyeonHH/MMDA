@@ -72,8 +72,9 @@ def get_config(parse=True, **optional_kwargs):
     # Mode
     parser.add_argument('--mode', type=str, default='train', help='one of train, dev or test')
     parser.add_argument('--runs', type=int, default=5)
-    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument('--n_gpu', type=int, default=1)
+    parser.add_argument('--num_thread_reader', type=int, default=1, help='') 
     parser.add_argument('--eval_mode', type=str, default='micro', help='one of {micro, macro, weighted}')
     parser.add_argument('--checkpoint', type=str, default=None)
 
@@ -140,7 +141,6 @@ def get_config(parse=True, **optional_kwargs):
                         help="Proportion of training to perform linear learning rate warmup for. E.g., 0.1 = 10%% of training.")
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
                         help="Number of updates steps to accumulate before performing a backward/update pass.")
-    parser.add_argument('--n_gpu', type=int, default=1, help="Changed in the execute process.")
     parser.add_argument('--bert_num_hidden_layers', type=int, default=6, help="Layer NO. of visual.")
     parser.add_argument('--visual_num_hidden_layers', type=int, default=3, help="Layer NO. of visual.")
     parser.add_argument('--audio_num_hidden_layers', type=int, default=3, help="Layer No. of audio")
@@ -151,7 +151,7 @@ def get_config(parse=True, **optional_kwargs):
     parser.add_argument('--use_kt', type=str2bool, default=True)
     parser.add_argument('--kt_model', type=str, 
                     default='Dynamic-tcp', help='one of {Static, Dynamic-ce, Dynamic-tcp}')
-    parser.add_argument('--warm_start', type=str2bool, default=True)
+    parser.add_argument('--warm_start', type=str2bool, default=False)
     parser.add_argument('--kt_weight', type=float, default=10000.0)
     parser.add_argument('--n_epoch_dkt', type=int, default=30)
     parser.add_argument('--dynamic_method', type=str, default='ratio', help='one of {threshold, ratio, noise_level}')

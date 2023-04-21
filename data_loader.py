@@ -146,7 +146,8 @@ def get_loader(config, shuffle=True, zero_label_process=False):
 
     data_loader = DataLoader(
         dataset=dataset,
-        batch_size=config.batch_size,
+        batch_size=config.batch_size // config.n_gpu,
+        num_workers=config.num_thread_reader,
         shuffle=shuffle,
         collate_fn=collate_fn)
 

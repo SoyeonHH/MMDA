@@ -211,7 +211,6 @@ def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=
     shape of label: (batch_size, num_classes=6)
     '''
 
-    # TODO: Implement dynamic knowledge transfer
     if dynamic_weight is None:
         dynamic_weight = [1, 1, 1, 1, 1, 1]
     

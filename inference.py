@@ -136,6 +136,14 @@ class Inference(object):
                 results["label"].extend(emo_label.detach().cpu().numpy())
                 results["prediction"].extend(predicted_labels.detach().cpu().numpy())
                 results["predicted_scores"].extend(predicted_scores.detach().cpu().numpy())
+                
+                results["pred_AV"].extend(pred_list[0].cpu().numpy())
+                results["pred_TA"].extend(pred_list[1].cpu().numpy())
+                results["pred_TV"].extend(pred_list[2].cpu().numpy())
+                results["pred_T"].extend(pred_list[3].cpu().numpy())
+                results["pred_V"].extend(pred_list[4].cpu().numpy())
+                results["pred_A"].extend(pred_list[5].cpu().numpy())
+            
                 results["tcp_TVA"].extend(get_tcp_target(emo_label, predicted_scores).detach().cpu().numpy())
                 results["tcp_AV"].extend(tcp_list[0].detach().cpu().numpy())
                 results["tcp_TA"].extend(tcp_list[1].detach().cpu().numpy())
@@ -316,7 +324,7 @@ def main():
     # test_config.batch_size = 1
     test_data_loader = get_loader(test_config, shuffle=False)
 
-    tester = Inference(test_config, test_data_loader, dkt=True)
+    tester = Inference(test_config, test_data_loader)
 
     # if test_config.use_confidNet:
     #     tester.inference_with_confidnet()
