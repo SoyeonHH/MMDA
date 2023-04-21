@@ -249,10 +249,10 @@ class MOSEI:
 
         # If cached data if already exists
         try:
-        # data = load_pickle(DATA_PATH + '/mosei.pkl')
-        # self.train = data['train']
-        # self.dev = data['dev']
-        # self.test = data['test']
+            # data = load_pickle(DATA_PATH + '/mosei.pkl')
+            # self.train = data['train']
+            # self.dev = data['dev']
+            # self.test = data['test']
             self.train = load_pickle(DATA_PATH + '/train.pkl')
             self.dev = load_pickle(DATA_PATH + '/dev.pkl')
             self.test = load_pickle(DATA_PATH + '/test.pkl')
@@ -396,18 +396,29 @@ class MOSEI:
 
             print(f"Total number of {num_drop} datapoints have been dropped.")
 
+            # Save pickles
+            to_pickle(train, DATA_PATH + '/train.pkl')
+            to_pickle(dev, DATA_PATH + '/dev.pkl')
+            to_pickle(test, DATA_PATH + '/test.pkl')
+
             word2id.default_factory = return_unk
 
             # Save glove embeddings cache too
             self.pretrained_emb = pretrained_emb = load_emb(word2id, config.word_emb_path)
             torch.save((pretrained_emb, word2id), CACHE_PATH)
 
-            # Save pickles
-            to_pickle(train, DATA_PATH + '/train.pkl')
-            to_pickle(dev, DATA_PATH + '/dev.pkl')
-            to_pickle(test, DATA_PATH + '/test.pkl')
+    def get_data(self, mode, zero_label_process=False):
 
-    def get_data(self, mode):
+        if zero_label_process == True:
+            '''
+            This function is used to remove the data points that have zero labels
+            Train: 2389/16315 = 14.6% data points are removed
+            Dev:  302/1871 = 16.1% data points are removed
+            Test:  701/4654 = 15.0% data points are removed
+            '''
+            self.train = self.zero_label_process(self.train)
+            self.dev = self.zero_label_process(self.dev)
+            self.test = self.zero_label_process(self.test)
 
         if mode == "train":
             return self.train, self.word2id, self.pretrained_emb
@@ -419,6 +430,14 @@ class MOSEI:
             print("Mode is not set properly (train/dev/test)")
             exit()
 
+    def zero_label_process(self, data):
+        new_data = []
+        for (words, visual, acoustic, actual_words), label, segment in data:
+            if np.sum(label[0][1:]) == 0:
+                continue
+            else:
+                new_data.append(((words, visual, acoustic, actual_words), label, segment))
+        return new_data
 
 
 

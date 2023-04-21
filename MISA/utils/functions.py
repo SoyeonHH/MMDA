@@ -218,27 +218,20 @@ def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=
 
     # TODO: Implement dynamic knowledge transfer
     if dynamic_weight is None:
-        dynamic_weight = [0, 0, 0, 0, 0, 0]
+        dynamic_weight = [1, 1, 1, 1, 1, 1]
     
-    if config.kt_model == 'Static':
-        # loss_t_v = dynamic_weight[0] * cosine_similarity_loss(t, v) + supervised_weight * supervised_loss(t, label)
-        loss_t = cosine_similarity_loss(t, v) + cosine_similarity_loss(t, a)
-        loss_v = cosine_similarity_loss(v, t) + cosine_similarity_loss(v, a)
-        loss_a = cosine_similarity_loss(a, t) + cosine_similarity_loss(a, v)
-
-        return loss_t + loss_v + loss_a
+    loss_t_v = torch.mean(dynamic_weight[0] * cosine_similarity_loss(t, v))
+    loss_t_a = torch.mean(dynamic_weight[1] * cosine_similarity_loss(t, a))
     
-    elif config.kt_model == 'Dynamic-tcp':
-        loss_t_v = dynamic_weight[0] * cosine_similarity_loss(t, v)
-        loss_t_a = dynamic_weight[1] * cosine_similarity_loss(t, a)
-        
-        loss_v_t = dynamic_weight[2] * cosine_similarity_loss(v, t)
-        loss_v_a = dynamic_weight[3] * cosine_similarity_loss(v, a)
+    loss_v_t = torch.mean(dynamic_weight[2] * cosine_similarity_loss(v, t))
+    loss_v_a = torch.mean(dynamic_weight[3] * cosine_similarity_loss(v, a))
 
-        loss_a_t = dynamic_weight[4] * cosine_similarity_loss(a, t)
-        loss_a_v = dynamic_weight[5] * cosine_similarity_loss(a, v)
+    loss_a_t = torch.mean(dynamic_weight[4] * cosine_similarity_loss(a, t))
+    loss_a_v = torch.mean(dynamic_weight[5] * cosine_similarity_loss(a, v))
 
-        return (loss_t_v + loss_t_a + loss_v_t + loss_v_a + loss_a_t + loss_a_v)
+    kt_loss = loss_t_v + loss_t_a + loss_v_t + loss_v_a + loss_a_t + loss_a_v
+
+    return kt_loss.squeeze()
 
 
 
@@ -348,3 +341,34 @@ def distillation_loss(output, target, T):
     target = F.softmax(target / T)
     loss = -torch.sum(target * output) / output.size()[0]
     return loss
+
+
+def binary_ce(output1, output2):
+    """
+    Binary Cross Entropy Loss
+    :param output1:
+    :param output2:
+    :return:
+    """
+    loss_bce = nn.BCEWithLogitsLoss(reduction='mean')
+    loss = [loss_bce(output1[i], output2[i]) for i in range(len(output1))]
+    return loss
+
+
+def get_tcp_target(y_true, y_pred):
+    """
+    Calculate the TCP for each batch
+    :param y_true: (batch_size, num_classes)
+    :param y_pred: (batch_size, num_classes)
+    :return: (batch_size)
+    """
+    tcp_target = []
+    for i in range(y_true.shape[0]):    # for each batch
+        tcp = 0.0
+        for j in range(y_true[i].shape[0]): # for each class
+            tcp += y_pred[i][j] * y_true[i][j]
+
+        tcp = tcp / torch.count_nonzero(y_true[i]) if torch.count_nonzero(y_true[i]) != 0 else 0.0
+        tcp_target.append(tcp)
+    
+    return to_gpu(torch.tensor(tcp_target))

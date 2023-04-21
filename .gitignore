@@ -2,3 +2,6 @@ __pycache__
 wandb
 pre_trained_models
 checkpoints
+hypertune
+*.json
+*.csv

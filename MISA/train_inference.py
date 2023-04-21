@@ -73,6 +73,11 @@ def main():
     solver.build()
 
     # Train the model (test scores will be returned based on dev performance)
+    #torch.save(self.model.state_dict(), f'checkpoints/model_{self.train_config.name}.std')
+    #torch.save(self.optimizer.state_dict(), f'checkpoints/optim_{self.train_config.name}.std')
+    #solver.model.load_state_dict(torch.load('checkpoints/model_2023-03-13_19:18:26.std'))
+    #solver.optimizer.load_state_dict(torch.load('checkpoints/optim_2023-03-13_19:18:26.std'))
+    
     solver.train()
 
     # Test the model
