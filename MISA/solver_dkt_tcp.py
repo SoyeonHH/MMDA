@@ -246,12 +246,12 @@ class Solver_DKT_TCP(object):
 
                 save_model(self.train_config, self.confidence_model, name="confidNet")
 
-            wandb.log(
-                {
-                    "train_loss_conf": train_avg_loss_conf,
-                    "valid_loss_conf": conf_loss
-                }
-            )
+            # wandb.log(
+            #     {
+            #         "train_loss_conf": train_avg_loss_conf,
+            #         "valid_loss_conf": conf_loss
+            #     }
+            # )
 
 
         ##########################################
@@ -299,17 +299,17 @@ class Solver_DKT_TCP(object):
                 tcp = torch.where(tcp > 0, tcp, 0.)
 
                 _, _, _, z_text_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="text", training=False)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text"], training=False)
                 tcp_text_removed, _ = self.confidence_model(z_text_removed)
                 tcp_text_removed = torch.where(tcp_text_removed > 0, tcp_text_removed, 0.)
 
                 _, _, _, z_video_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="video", training=False)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["video"], training=False)
                 tcp_video_removed, _ = self.confidence_model(z_video_removed)
                 tcp_video_removed = torch.where(tcp_video_removed > 0, tcp_video_removed, 0.)
 
                 _, _, _, z_audio_removed = self.model(t, v, a, l, \
-                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality="audio", training=False)
+                    bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["audio"], training=False)
                 tcp_audio_removed, _ = self.confidence_model(z_audio_removed)
                 tcp_audio_removed = torch.where(tcp_audio_removed > 0, tcp_audio_removed, 0.)
                 
@@ -342,11 +342,11 @@ class Solver_DKT_TCP(object):
                     
                 dynamic_weight = torch.tensor(dynamic_weight, dtype=torch.float).to(self.device)
                 
-                # update kt_loss weight
-                self.train_config.use_kt = True
-                if e / 10 == 0 and e != 0:
-                    self.train_config.kt_weight *= 2
-                    print("================ KT weight: ", self.train_config.kt_weight, " ================")
+                # # update kt_loss weight
+                # self.train_config.use_kt = True
+                # if e / 10 == 0 and e != 0:
+                #     self.train_config.kt_weight *= 2
+                #     print("================ KT weight: ", self.train_config.kt_weight, " ================")
 
                 # train the fusion model with dynamic weighted kt
                 loss, y_tilde, predicted_labels, _ = self.model(t, v, a, l, \
@@ -431,7 +431,6 @@ class Solver_DKT_TCP(object):
                 metric_value=eval_values['acc'],
                 global_step=e
             )
-
 
 
         ##########################################

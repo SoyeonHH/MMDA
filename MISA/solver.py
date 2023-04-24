@@ -64,7 +64,7 @@ class Solver(object):
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
         if pretrained_model is not None:
-            self.model.load_state_dict(pretrained_model)
+            self.model = pretrained_model
 
         # Final list 
         for name, param in self.model.named_parameters():

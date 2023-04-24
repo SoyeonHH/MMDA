@@ -68,39 +68,44 @@ def main():
     dev_data_loader = get_loader(dev_config, shuffle = False)
     test_data_loader = get_loader(test_config, shuffle = False)
 
-    solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    if train_config.use_kt == True and train_config.kt_model == 'Dynamic-tcp':
+        solver = Solver_DKT_TCP(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    elif train_config.use_kt == True and train_config.kt_model == 'Dynamic-ce':
+        solver = Solver_DKT_CE(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    else:
+        solver = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
 
     # Build the model
     solver.build()
 
-    try:
-        model = load_model(args, name=args.model)
-    except:
-        model = solver.train()
+    # try:
+    #     model = load_model(args, name=args.model)
+    # except:
+    model = solver.train()
 
-    tester = Inference(test_config, test_data_loader, model=model)
+    tester = Inference(test_config, test_data_loader)
     tester.inference()
     
-    if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
-        # Training the confidnet with zero_label_processed version
-        train_data_loader_nonzero = get_loader(train_config, shuffle = True, zero_label_process=True)
-        dev_data_loader_nonzero = get_loader(dev_config, shuffle = False, zero_label_process=True)
-        test_data_loader_nonzero = get_loader(test_config, shuffle = False, zero_label_process=True)
+    # if args.use_kt == True and args.kt_model == 'Dynamic-tcp':
+    #     # Training the confidnet with zero_label_processed version
+    #     train_data_loader_nonzero = get_loader(train_config, shuffle = True, zero_label_process=True)
+    #     dev_data_loader_nonzero = get_loader(dev_config, shuffle = False, zero_label_process=True)
+    #     test_data_loader_nonzero = get_loader(test_config, shuffle = False, zero_label_process=True)
 
-        try:
-            trained_confidnet = load_model(args, name=args.model, confidNet=True)
-        except:
-            confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero)
-            trained_confidnet = confidnet_trainer.train()
-            trained_confidnet = trained_confidnet.state_dict()
+    #     # try:
+    #     #     trained_confidnet = load_model(args, name=args.model, confidNet=True)
+    #     # except:
+    #     confidnet_trainer = ConfidNet_Trainer(train_config, train_data_loader_nonzero, dev_data_loader_nonzero, test_data_loader_nonzero)
+    #     trained_confidnet = confidnet_trainer.train()
+    #     trained_confidnet = trained_confidnet.state_dict()
         
-        solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
-        solver_dkt_tcp.build(pretrained_model=model, confidnet=trained_confidnet)
-        model = solver_dkt_tcp.train(additional_training=True)
-        model = model.state_dict()
+    #     solver_dkt_tcp = Solver(train_config, dev_config, test_config, train_data_loader, dev_data_loader, test_data_loader, is_train=True)
+    #     solver_dkt_tcp.build(pretrained_model=model, confidnet=trained_confidnet)
+    #     model = solver_dkt_tcp.train(additional_training=True)
+    #     model = model
 
-        tester = Inference(test_config, test_data_loader, model=model, dkt=True)
-        tester.inference()
+    #     tester = Inference(test_config, test_data_loader, model=model, dkt=True)
+    #     tester.inference()
 
 if __name__ == "__main__":
     main()
