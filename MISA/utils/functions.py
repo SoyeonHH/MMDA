@@ -208,7 +208,7 @@ def get_recon_loss(utt_recon, utt_orig):
     return loss
 
 
-def get_kt_loss(config, t, v, a, label, dynamic_weight=None, supervised_weights=0):
+def get_kt_loss(t, v, a, label, dynamic_weight=None, supervised_weights=0):
     '''
     shape of t: (batch_size, hidden_size)
     shape of v: (batch_size, hidden_size)

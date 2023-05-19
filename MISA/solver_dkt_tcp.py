@@ -62,8 +62,13 @@ class Solver_DKT_TCP(object):
             self.model = getattr(models, self.train_config.model)(self.train_config)
         
         # bulid confidence model
-        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config, self.train_config.hidden_size*6, \
-            num_classes=1, dropout=self.train_config.conf_dropout)
+        if self.train_config.model == "MISA":
+            confid_input_dim = self.train_config.hidden_size*6
+        elif self.train_config.model == "TFN":
+            confid_input_dim = self.train_config.hidden_size
+            
+        self.confidence_model = getattr(models, "ConfidenceRegressionNetwork")(self.train_config, confid_input_dim, \
+                            num_classes=1, dropout=self.train_config.conf_dropout)
         self.confidence_model = to_gpu(self.confidence_model)
         self.confidence_optimizer = torch.optim.Adam(self.confidence_model.parameters(), lr=self.train_config.conf_lr)
 
@@ -242,9 +247,9 @@ class Solver_DKT_TCP(object):
                 print("Found new best model on dev set!")
                 if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
                 torch.save(self.confidence_model.state_dict(), f'checkpoints/confidNet_{self.train_config.name}.std')
-                self.train_config.checkpoint = f'checkpoints/confidNet_{self.train_config.name}.std'
+                # self.train_config.checkpoint = f'checkpoints/confidNet_{self.train_config.name}.std'
 
-                save_model(self.train_config, self.confidence_model, name="confidNet")
+                save_model(self.train_config, self.confidence_model, name="confidNet", confidNet=True)
 
             # wandb.log(
             #     {
@@ -390,7 +395,7 @@ class Solver_DKT_TCP(object):
 
                 # 임의로 모델 경로 지정 및 저장
                 save_model(self.train_config, self.model, name=self.train_config.model, dynamicKT=True)
-                save_model(self.train_config, self.confidence_model, name=self.train_config.model, confidNet=True)
+                # save_model(self.train_config, self.confidence_model, name=self.train_config.model, confidNet=True)
 
                 # Print best model results
                 eval_values_best = get_metrics(best_truths, best_results, self.train_config.eval_mode)

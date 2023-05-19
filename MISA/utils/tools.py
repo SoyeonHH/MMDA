@@ -39,6 +39,9 @@ def load_model(args, name='', confidNet=None, dynamicKT=None):
         file = f'pre_trained_models/best_model_{args.data}_{name}_kt_{args.kt_model}_{args.kt_weight}.pt'
     else:
         file = f'pre_trained_models/best_model_{args.data}_{name}_baseline_epoch({args.n_epoch}).pt'
+        
+    print(f'Load model from {file}')
+    
     with open(file, 'rb') as f:
         buffer = io.BytesIO(f.read())
     model = torch.load(buffer)

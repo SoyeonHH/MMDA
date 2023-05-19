@@ -8,7 +8,7 @@ import pprint
 from torch import optim
 import torch.nn as nn
 
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # path to a pretrained word embedding file
 # word_emb_path = '/home/iknow/workspace/multimodal/glove.840B.300d.txt'
@@ -158,7 +158,7 @@ def get_config(parse=True, **optional_kwargs):
 
     # Model
     parser.add_argument('--model', type=str,
-                        default='MISA', help='one of {MISA, }')
+                        default='MISA', help='one of {MISA, TFN, Early}')
     parser.add_argument('--use_confidNet', type=str2bool, default=True)
     parser.add_argument('--conf_loss', type=str, default='mse', help='one of {mse, focal, ranking}')
     parser.add_argument('--conf_lr', type=float, default=1e-5)

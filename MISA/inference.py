@@ -52,17 +52,16 @@ import models
 bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 class Inference(object):
-    def __init__(self, config, dataloader, model=None, confidence_model=None, checkpoint=None, dkt=False):
+    def __init__(self, config, dataloader, model=None, confidence_model=None, checkpoint=None):
         self.config = config
         self.dataloader = dataloader
         self.confidence_model = confidence_model
         self.checkpoint = checkpoint
-        self.dkt = dkt
         self.device = torch.device(config.device)
 
         self.model = getattr(models, config.model)(config)
         if model is None:
-            if dkt:
+            if config.use_kt:
                 self.model.load_state_dict(load_model(config, name=config.model, dynamicKT=True))
             else:
                 self.model.load_state_dict(load_model(config, name=config.model))
@@ -98,7 +97,6 @@ class Inference(object):
                 result = dict()
 
                 actual_words, t, v, a, y, emo_label, l, bert_sent, bert_sent_type, bert_sent_mask, ids = batch
-                label_input, label_mask = Solver.get_label_input()
 
                 t = to_gpu(t)
                 v = to_gpu(v)
@@ -110,8 +108,6 @@ class Inference(object):
                 bert_sent = to_gpu(bert_sent)
                 bert_sent_type = to_gpu(bert_sent_type)
                 bert_sent_mask = to_gpu(bert_sent_mask)
-                label_input = to_gpu(label_input)
-                label_mask = to_gpu(label_mask)
 
                 loss, predicted_scores, predicted_labels, hidden_state = \
                     self.model(t, v, a, l, bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=None,\
@@ -140,12 +136,12 @@ class Inference(object):
                 _, logit_only_audio, pred_only_audio, z_only_audio = self.model(t, v, a, l, \
                     bert_sent, bert_sent_type, bert_sent_mask, labels=emo_label, masked_modality=["text", "video"], training=False)
                 
-                pred_va.append(pred_text_removed.cpu().numpy())
-                pred_ta.append(pred_visual_removed.cpu().numpy())
-                pred_tv.append(pred_audio_removed.cpu().numpy())
-                pred_t.append(pred_only_text.cpu().numpy())
-                pred_v.append(pred_only_visual.cpu().numpy())
-                pred_a.append(pred_only_audio.cpu().numpy())
+                pred_va.append(pred_text_removed.detach().cpu().numpy())
+                pred_ta.append(pred_visual_removed.detach().cpu().numpy())
+                pred_tv.append(pred_audio_removed.detach().cpu().numpy())
+                pred_t.append(pred_only_text.detach().cpu().numpy())
+                pred_v.append(pred_only_visual.detach().cpu().numpy())
+                pred_a.append(pred_only_audio.detach().cpu().numpy())
 
                 results["id"].extend(ids)
                 results["input_sentence"].extend(actual_words)
@@ -153,12 +149,12 @@ class Inference(object):
                 results["prediction"].extend(predicted_labels.detach().cpu().numpy())
                 results["predicted_scores"].extend(predicted_scores.detach().cpu().numpy())
                 
-                results["pred_AV"].extend(pred_text_removed.cpu().numpy())
-                results["pred_TA"].extend(pred_visual_removed.cpu().numpy())
-                results["pred_TV"].extend(pred_audio_removed.cpu().numpy())
-                results["pred_T"].extend(pred_only_text.cpu().numpy())
-                results["pred_V"].extend(pred_only_visual.cpu().numpy())
-                results["pred_A"].extend(pred_only_audio.cpu().numpy())
+                results["pred_AV"].extend(pred_text_removed.detach().cpu().numpy())
+                results["pred_TA"].extend(pred_visual_removed.detach().cpu().numpy())
+                results["pred_TV"].extend(pred_audio_removed.detach().cpu().numpy())
+                results["pred_T"].extend(pred_only_text.detach().cpu().numpy())
+                results["pred_V"].extend(pred_only_visual.detach().cpu().numpy())
+                results["pred_A"].extend(pred_only_audio.detach().cpu().numpy())
                 
                 results["tcp_TVA"].extend(get_tcp_target(emo_label, predicted_scores).detach().cpu().numpy())
                 results["tcp_AV"].extend(get_tcp_target(emo_label, logit_text_removed).detach().cpu().numpy())
@@ -182,7 +178,7 @@ class Inference(object):
         y_true = np.concatenate(y_true, axis=0).squeeze()
         y_pred = np.concatenate(y_pred, axis=0).squeeze()
 
-        if self.dkt:
+        if self.config.use_kt:
             csv_file_name = os.getcwd() + "/results/results_{}_{}_{}({})_dropout({})_batchsize({})_epoch({}).csv".format(\
                 self.config.data, self.config.model, self.config.kt_model, self.config.kt_weight, self.config.dropout, self.config.batch_size, self.config.n_epoch)
         else:
@@ -202,14 +198,18 @@ class Inference(object):
             writer.writerow(results.keys())
             for i in range(len(results["id"])):
                 writer.writerow([results[x][i] for x in key_list])
+                
+        print("Results saved in {}".format(csv_file_name))
         
         # Total results log
         accuracy = get_accuracy(y_true, y_pred)
-        eval_values = get_metrics(y_true, y_pred, average=self.config.eval_mode)
+        # eval_values = get_metrics(y_true, y_pred, average=self.config.eval_mode)
 
         print("="*50)
-        print("Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, accuracy))
-        print("Precision: {:.4f}, Recall: {:.4f}, F1: {:.4f}".format(eval_values['precision'], eval_values['recall'], eval_values['f1']))
+        # print("Loss: {:.4f}, Accuracy: {:.4f}".format(eval_loss, accuracy))
+        # print("Precision: {:.4f}, Recall: {:.4f}, F1: {:.4f}".format(eval_values['precision'], eval_values['recall'], eval_values['f1']))
+        test_micro_f1, test_micro_precision, test_micro_recall, test_acc = get_metrics_new(y_true, y_pred, results)
+        print(f"----- micro_f1: {test_micro_f1}, micro_precision: {test_micro_precision}, micro_recall: {test_micro_recall},  acc: {test_acc}")
         print("="*50)
 
         acc_list = [
@@ -225,9 +225,9 @@ class Inference(object):
         total_results = {
             "loss": eval_loss,
             "accuracy": accuracy,
-            "precision": eval_values['precision'],
-            "recall": eval_values['recall'],
-            "f1": eval_values['f1'],
+            "precision": test_micro_precision,
+            "recall": test_micro_recall,
+            "f1": test_micro_f1,
             "acc_va": acc_list[0],
             "acc_ta": acc_list[1],
             "acc_tv": acc_list[2],
@@ -244,6 +244,8 @@ class Inference(object):
         
         with open(os.getcwd() + json_name, "w") as f:
             json.dump(total_results, f, indent=4)
+            
+        print("Results saved in {}".format(json_name))
 
 
 
